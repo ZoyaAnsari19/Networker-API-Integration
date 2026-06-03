@@ -54,7 +54,11 @@ export async function fetchMyKYC(): Promise<KYCRequest | null> {
     ApiEnvelope<{ request: Record<string, unknown> | null }>
   >('/api/v1/kyc/me');
   const request = unwrapData(envelope).request;
-  return request ? normalizeKYCRequest(request) : null;
+  return request
+    ? normalizeKYCRequest(
+        request as Parameters<typeof normalizeKYCRequest>[0],
+      )
+    : null;
 }
 
 export async function changePasswordRequest(
@@ -155,7 +159,9 @@ export async function uploadKYCDocumentRequest(
   if (!res.ok || parsed.success === false) {
     throw new Error(parsed.error || parsed.message || 'KYC upload failed');
   }
-  return normalizeKYCDocument(unwrapData(parsed));
+  return normalizeKYCDocument(
+    unwrapData(parsed) as Parameters<typeof normalizeKYCDocument>[0],
+  );
 }
 
 export async function submitKYCRequest(): Promise<void> {

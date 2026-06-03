@@ -2,92 +2,32 @@
 
 import * as React from 'react';
 import {
-  mockDelay,
-  mockDirectLedger,
-  mockMeProfile,
-  mockTeamLedger,
-  mockTreeView,
-  mockWalletSummary,
-} from '@/lib/mock-api-data';
-import { devError, devLog, devWarn } from '@/lib/dev-log';
+  fetchAllLedgerEntries,
+  fetchDashboardProfile,
+  fetchTreeView,
+} from '@/lib/dashboard-api';
+import type {
+  BinarySide,
+  BinarySides,
+  DailyEarnings,
+  DashboardProfile,
+  EarningsTotals,
+  LedgerEntry,
+  TreeView,
+  WalletSummary,
+} from '@/lib/dashboard-types';
+import { devError, devLog } from '@/lib/dev-log';
 
-export interface DashboardProfile {
-  user_id: string;
-  sponsor_id: string;
-  full_name: string;
-  email: string;
-  phone: string | null;
-  status: string;
-  role: string;
-  current_package_id: string | null;
-  package_activated_at: string | null;
-  monthly_income_paise: number;
-  monthly_shopping_paise: number;
-  income_period_ym: number;
-  today_binary_earned: number;
-  daily_binary_cap: number;
-  placement_status: string;
-  package_name: string | null;
-  package_amount: number | null;
-  direct_wallet_balance: number;
-  team_wallet_balance: number;
-  direct_referral_count: number;
-  sponsor_name: string | null;
-}
-
-export interface WalletSummary {
-  direct_balance: number;
-  team_balance: number;
-  total_balance: number;
-}
-
-export interface LedgerEntry {
-  id: number;
-  user_id: string;
-  wallet_type: 'DIRECT' | 'TEAM';
-  amount: number;
-  entry_type: 'CREDIT' | 'DEBIT';
-  source: string;
-  reference_id: string | null;
-  reference_type: string | null;
-  created_at: string;
-}
-
-export interface TreeView {
-  user_id: string;
-  full_name: string;
-  leg: string | null;
-  left_bv: number;
-  right_bv: number;
-  status: string;
-  left?: TreeView;
-  right?: TreeView;
-}
-
-export interface BinarySide {
-  count: number;
-  activeCount: number;
-  volume: number;
-}
-
-export interface BinarySides {
-  left: BinarySide;
-  right: BinarySide;
-}
-
-export interface DailyEarnings {
-  date: string;
-  dateLabel: string;
-  direct: number;
-  binary: number;
-}
-
-export interface EarningsTotals {
-  today: number;
-  weekly: number;
-  monthly: number;
-  total: number;
-}
+export type {
+  DashboardProfile,
+  WalletSummary,
+  LedgerEntry,
+  TreeView,
+  BinarySide,
+  BinarySides,
+  DailyEarnings,
+  EarningsTotals,
+} from '@/lib/dashboard-types';
 
 export interface DashboardData {
   profile: DashboardProfile | null;
@@ -168,15 +108,16 @@ function buildSeries(
   const consume = (entries: LedgerEntry[], bucketField: 'direct' | 'binary') => {
     for (const e of entries) {
       if (e.entry_type !== 'CREDIT') continue;
+      const rupees = e.amount / 100;
       const at = new Date(e.created_at);
-      totals.total += e.amount;
-      if (at >= monthStart) totals.monthly += e.amount;
-      if (at >= weekStart) totals.weekly += e.amount;
-      if (at >= today) totals.today += e.amount;
+      totals.total += rupees;
+      if (at >= monthStart) totals.monthly += rupees;
+      if (at >= weekStart) totals.weekly += rupees;
+      if (at >= today) totals.today += rupees;
 
       const key = startOfDay(at).toISOString().split('T')[0];
       const b = buckets.get(key);
-      if (b) b[bucketField] += e.amount;
+      if (b) b[bucketField] += rupees;
     }
   };
 
@@ -200,35 +141,44 @@ export function useDashboardData(rangeDays: number = 30): DashboardData {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    devWarn(
-      'Dashboard',
-      `Using MOCK data (not API). rangeDays=${rangeDays}. Wire use-dashboard-data to /me + wallet ledgers.`,
-    );
+    devLog('Dashboard', 'Loading from API…', { rangeDays });
     try {
-      await mockDelay();
-      setProfile(mockMeProfile);
-      setWallets(mockWalletSummary);
-      setBinary(countTreeSides(mockTreeView));
+      const [profileData, directLedger, teamLedger, tree] = await Promise.all([
+        fetchDashboardProfile(),
+        fetchAllLedgerEntries('DIRECT'),
+        fetchAllLedgerEntries('TEAM'),
+        fetchTreeView(15),
+      ]);
+
+      const walletSummary: WalletSummary = {
+        direct_balance: profileData.direct_wallet_balance,
+        team_balance: profileData.team_wallet_balance,
+        total_balance:
+          profileData.direct_wallet_balance + profileData.team_wallet_balance,
+      };
 
       const { series, totals: t } = buildSeries(
-        mockDirectLedger,
-        mockTeamLedger,
+        directLedger,
+        teamLedger,
         rangeDays,
       );
+
+      setProfile(profileData);
+      setWallets(walletSummary);
+      setBinary(countTreeSides(tree));
       setEarningsSeries(series);
       setTotals(t);
-      devLog('Dashboard', 'KPI totals (mock, paise)', {
-        total: t.total,
-        today: t.today,
-        weekly: t.weekly,
-        monthly: t.monthly,
-        direct_wallet: mockWalletSummary.direct_balance,
-        team_wallet: mockWalletSummary.team_balance,
-        display_name: mockMeProfile.full_name,
-        direct_referrals: mockMeProfile.direct_referral_count,
-        monthly_income_paise: mockMeProfile.monthly_income_paise,
-        today_binary_earned: mockMeProfile.today_binary_earned,
-        daily_binary_cap: mockMeProfile.daily_binary_cap,
+
+      devLog('Dashboard', 'Loaded (API, paise)', {
+        full_name: profileData.full_name,
+        sponsor_id: profileData.sponsor_id,
+        direct_referrals: profileData.direct_referral_count,
+        totals: t,
+        direct_ledger_rows: directLedger.length,
+        team_ledger_rows: teamLedger.length,
+        monthly_income_paise: profileData.monthly_income_paise,
+        today_binary_earned: profileData.today_binary_earned,
+        daily_binary_cap: profileData.daily_binary_cap,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load dashboard';
