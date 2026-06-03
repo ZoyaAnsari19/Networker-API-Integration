@@ -1,7 +1,7 @@
-/**
- * User app runs in demo mode with local mock data only.
- * Kept for compatibility if any import remains; returns empty string.
- */
+/** Backend API origin (no trailing slash). */
 export function getApiBaseUrl(): string {
-  return '';
+  const base =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
+    'http://localhost:3100';
+  return base.replace(/\/+$/, '');
 }

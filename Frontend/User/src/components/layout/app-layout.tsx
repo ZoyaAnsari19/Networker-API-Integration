@@ -14,7 +14,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-/** Keeps sidebar/header avatar + display name in sync with profile mock data. */
+/** Keeps sidebar/header avatar + display name in sync with profile API data. */
 function ProfileSessionSync() {
   const { profile } = useProfileData();
   const updateProfile = useAuthStore((s) => s.updateProfile);
