@@ -12,6 +12,7 @@ import {
   readAuthSession,
   writeAuthSession,
 } from '@/lib/auth-session';
+import { devError, devLog } from '@/lib/dev-log';
 
 export interface User {
   id: string;
@@ -75,6 +76,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate: () => {
     const stored = readAuthSession();
     if (stored?.authenticated && stored.accessToken) {
+      devLog('Auth', 'Session restored from localStorage', {
+        email: stored.user?.email,
+        sponsor_id: stored.user?.referralCode,
+        hasToken: true,
+      });
       set({
         user: stored.user ?? { ...currentUser },
         isAuthenticated: true,
@@ -82,6 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return;
     }
+    devLog('Auth', 'No JWT session — user must log in');
     set({
       user: { ...currentUser },
       isAuthenticated: false,
@@ -99,17 +106,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         refreshToken: result.refresh_token,
         user,
       });
+      devLog('Auth', 'Login success', {
+        user_id: result.user.user_id,
+        email: result.user.email,
+        sponsor_id: result.user.sponsor_id,
+        role: result.user.role,
+      });
       set({
         user,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (error) {
+      devError('Auth', 'Login failed', error);
       set({ isLoading: false });
       throw error;
     }
   },
   logout: () => {
+    devLog('Auth', 'Logout');
     clearAuthSession();
     writeAuthSession({ authenticated: false });
     set({

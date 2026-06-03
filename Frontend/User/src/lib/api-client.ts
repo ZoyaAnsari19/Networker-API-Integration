@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from '@/lib/api-base';
 import { getAccessToken } from '@/lib/auth-session';
+import { devLogApi } from '@/lib/dev-log';
 
 export class ApiError extends Error {
   status: number;
@@ -61,11 +62,33 @@ export async function apiRequest(
     payload = body as BodyInit;
   }
 
-  return fetch(buildUrl(path), {
+  const method = (rest.method ?? 'GET').toUpperCase();
+  const url = buildUrl(path);
+  const started = Date.now();
+  const logBody =
+    body && typeof body === 'object' && !(body instanceof FormData)
+      ? body
+      : body instanceof FormData
+        ? '[FormData]'
+        : undefined;
+
+  devLogApi(method, path, { body: logBody });
+
+  const res = await fetch(url, {
     ...rest,
     headers,
     body: payload,
   });
+
+  if (!res.ok) {
+    devLogApi(method, path, {
+      status: res.status,
+      ok: false,
+      durationMs: Date.now() - started,
+    });
+  }
+
+  return res;
 }
 
 export async function apiJson<T>(
@@ -84,11 +107,21 @@ export async function apiJson<T>(
   }
 
   if (!res.ok || parsed.success === false) {
-    throw new ApiError(
-      res.status,
-      parsed.error || parsed.message || 'Request failed',
-    );
+    const errMsg = parsed.error || parsed.message || 'Request failed';
+    devLogApi((options.method ?? 'GET').toUpperCase(), path, {
+      status: res.status,
+      ok: false,
+      error: errMsg,
+      response: parsed,
+    });
+    throw new ApiError(res.status, errMsg);
   }
+
+  devLogApi((options.method ?? 'GET').toUpperCase(), path, {
+    status: res.status,
+    ok: true,
+    response: parsed,
+  });
 
   return parsed as T;
 }

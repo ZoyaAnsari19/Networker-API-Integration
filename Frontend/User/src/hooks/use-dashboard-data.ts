@@ -9,6 +9,7 @@ import {
   mockTreeView,
   mockWalletSummary,
 } from '@/lib/mock-api-data';
+import { devError, devLog, devWarn } from '@/lib/dev-log';
 
 export interface DashboardProfile {
   user_id: string;
@@ -199,6 +200,10 @@ export function useDashboardData(rangeDays: number = 30): DashboardData {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    devWarn(
+      'Dashboard',
+      `Using MOCK data (not API). rangeDays=${rangeDays}. Wire use-dashboard-data to /me + wallet ledgers.`,
+    );
     try {
       await mockDelay();
       setProfile(mockMeProfile);
@@ -212,8 +217,23 @@ export function useDashboardData(rangeDays: number = 30): DashboardData {
       );
       setEarningsSeries(series);
       setTotals(t);
+      devLog('Dashboard', 'KPI totals (mock, paise)', {
+        total: t.total,
+        today: t.today,
+        weekly: t.weekly,
+        monthly: t.monthly,
+        direct_wallet: mockWalletSummary.direct_balance,
+        team_wallet: mockWalletSummary.team_balance,
+        display_name: mockMeProfile.full_name,
+        direct_referrals: mockMeProfile.direct_referral_count,
+        monthly_income_paise: mockMeProfile.monthly_income_paise,
+        today_binary_earned: mockMeProfile.today_binary_earned,
+        daily_binary_cap: mockMeProfile.daily_binary_cap,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+      const msg = e instanceof Error ? e.message : 'Failed to load dashboard';
+      devError('Dashboard', msg, e);
+      setError(msg);
     } finally {
       setLoading(false);
     }

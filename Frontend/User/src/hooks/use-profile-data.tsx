@@ -18,6 +18,7 @@ import type {
   KYCRequest,
   UserProfile,
 } from '@/lib/profile-types';
+import { devError, devLog } from '@/lib/dev-log';
 
 export type {
   KYCStatus,
@@ -75,6 +76,7 @@ function useProfileDataState(): ProfileData {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    devLog('Profile', 'Loading /me + /kyc/me…');
     try {
       const [profileData, kycData] = await Promise.all([
         fetchMyProfile(),
@@ -82,8 +84,19 @@ function useProfileDataState(): ProfileData {
       ]);
       setProfile(profileData);
       setKYC(kycData);
+      devLog('Profile', 'Loaded', {
+        full_name: profileData.full_name,
+        sponsor_id: profileData.sponsor_id,
+        direct_referral_count: profileData.direct_referral_count,
+        monthly_income_paise: profileData.monthly_income_paise,
+        today_binary_earned: profileData.today_binary_earned,
+        daily_binary_cap: profileData.daily_binary_cap,
+        kyc_status: profileData.kyc_status ?? kycData?.status ?? null,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load profile');
+      const msg = e instanceof Error ? e.message : 'Failed to load profile';
+      devError('Profile', msg, e);
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -9,6 +9,7 @@ import { MobileNav } from './mobile-nav';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { ProfileDataProvider, useProfileData } from '@/hooks/use-profile-data';
+import { devLog } from '@/lib/dev-log';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,10 @@ function ProfileSessionSync() {
   const updateProfile = useAuthStore((s) => s.updateProfile);
   React.useEffect(() => {
     if (!profile) return;
+    devLog('Layout', 'Header sync from profile API', {
+      full_name: profile.full_name,
+      sponsor_id: profile.sponsor_id,
+    });
     updateProfile({
       name: profile.full_name,
       ...(profile.avatar_url ? { avatar: profile.avatar_url } : {}),

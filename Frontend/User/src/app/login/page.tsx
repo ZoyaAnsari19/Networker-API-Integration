@@ -6,6 +6,7 @@ import { Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api-client';
+import { devLog } from '@/lib/dev-log';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 export default function LoginPage() {
@@ -28,6 +29,7 @@ export default function LoginPage() {
       setError('Email and password are required.');
       return;
     }
+    devLog('Login', 'Submitting…', { identifier: email.trim() });
     try {
       await login(email.trim(), password);
       router.replace('/');
