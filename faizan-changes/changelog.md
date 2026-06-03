@@ -787,3 +787,31 @@ Task log for this repo. After every completed task, append a new block **at the 
 **Branch:** N/A (not a git repository)
 
 ---
+
+## [03-06-2026 14:30] — Dashboard KPIs wired to API (no mock)
+
+**What changed:** Replaced dashboard mock data with live API calls: `GET /api/v1/me` for profile, wallets, package, binary cap, and referrals; paginated `GET /api/v1/wallets/DIRECT|TEAM/ledger` for earnings KPIs and chart; `GET /api/v1/tree` for binary side counts/volume. Added `dashboard-api.ts` / `dashboard-types.ts`. Ledger amounts converted paise → rupees for StatCard/chart. Dashboard page display uses `paiseToRupees` for wallets, caps, and progress bars.
+
+**Files touched:** `Frontend/User/src/lib/dashboard-api.ts`, `Frontend/User/src/lib/dashboard-types.ts`, `Frontend/User/src/hooks/use-dashboard-data.ts`, `Frontend/User/src/app/page.tsx`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /api/v1/me`, `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/wallets/TEAM/ledger`, `GET /api/v1/tree`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
+
+## [03-06-2026 15:00] — Income page API integration (no mock)
+
+**What changed:** Income page loads commission history from paginated wallet ledgers instead of `mock-api-data`. Direct tab uses `DIRECT` wallet (`DIRECT_COMMISSION`, `FRANCHISE_COMMISSION`); Binary/Level tabs use `TEAM` wallet (`BINARY_MATCH`, `LEVEL_BONUS`). KPI totals and tables filter by statement period client-side. Ledger normalizer now includes `payer_name` from API.
+
+**Files touched:** `Frontend/User/src/hooks/use-income-data.ts`, `Frontend/User/src/lib/dashboard-api.ts`, `Frontend/User/src/lib/dashboard-types.ts`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/wallets/TEAM/ledger`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---

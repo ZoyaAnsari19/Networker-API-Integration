@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { DevConsoleInit } from "@/components/providers/dev-console-init";
 import { AppLayout } from "@/components/layout";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider>
+          <DevConsoleInit />
           <AppLayout>{children}</AppLayout>
         </ThemeProvider>
       </body>

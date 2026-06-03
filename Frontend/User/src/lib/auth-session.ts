@@ -4,6 +4,8 @@ export const AUTH_STORAGE_KEY = 'fmcg-binary-auth';
 
 export interface StoredAuthSession {
   authenticated: boolean;
+  accessToken?: string;
+  refreshToken?: string;
   user?: User;
 }
 
@@ -34,4 +36,12 @@ export function clearAuthSession(): void {
   } catch {
     /* ignore */
   }
+}
+
+export function getAccessToken(): string | null {
+  return readAuthSession()?.accessToken ?? null;
+}
+
+export function getRefreshToken(): string | null {
+  return readAuthSession()?.refreshToken ?? null;
 }

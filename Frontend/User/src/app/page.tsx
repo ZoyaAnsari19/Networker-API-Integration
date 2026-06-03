@@ -40,6 +40,8 @@ function pct(used: number, total: number): number {
   return Math.min(100, Math.max(0, (used / total) * 100));
 }
 
+const paiseToRupees = (p: number) => (p || 0) / 100;
+
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const { profile, wallets, binary, earningsSeries, totals, loading, error } =
@@ -177,7 +179,7 @@ export default function DashboardPage() {
                     </p>
                     {hasPackage && profile?.package_amount ? (
                       <p className="text-xs text-text-muted mt-0.5">
-                        {formatCurrency(profile.package_amount, 0)} package
+                        {formatCurrency(paiseToRupees(profile.package_amount), 0)} package
                         {' · '}
                         daily binary cap drives earning speed
                       </p>
@@ -213,8 +215,10 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="text-text-muted">Monthly income</span>
                     <span className="font-medium text-text-secondary">
-                      {formatCurrencyCompact(monthlyIncome)} /{' '}
-                      {formatCurrencyCompact(MONTHLY_INCOME_THRESHOLD_PAISE)}
+                      {formatCurrencyCompact(paiseToRupees(monthlyIncome))} /{' '}
+                      {formatCurrencyCompact(
+                        paiseToRupees(MONTHLY_INCOME_THRESHOLD_PAISE),
+                      )}
                     </span>
                   </div>
                   <Progress
@@ -227,8 +231,10 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="text-text-muted">Monthly shopping</span>
                     <span className="font-medium text-text-secondary">
-                      {formatCurrencyCompact(monthlyShopping)} /{' '}
-                      {formatCurrencyCompact(MONTHLY_SHOPPING_THRESHOLD_PAISE)}
+                      {formatCurrencyCompact(paiseToRupees(monthlyShopping))} /{' '}
+                      {formatCurrencyCompact(
+                        paiseToRupees(MONTHLY_SHOPPING_THRESHOLD_PAISE),
+                      )}
                     </span>
                   </div>
                   <Progress
@@ -271,10 +277,10 @@ export default function DashboardPage() {
                       Today&apos;s Binary Cap
                     </p>
                     <p className="text-xl font-bold text-text-primary">
-                      {formatCurrency(dailyUsed, 0)}
+                      {formatCurrency(paiseToRupees(dailyUsed), 0)}
                       <span className="text-sm font-medium text-text-muted">
                         {' '}
-                        / {formatCurrency(dailyCap, 0)}
+                        / {formatCurrency(paiseToRupees(dailyCap), 0)}
                       </span>
                     </p>
                     <p className="text-xs text-text-muted mt-0.5">
@@ -320,7 +326,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <WalletCard
           title="Direct Wallet"
-          balance={wallets?.direct_balance ?? 0}
+          balance={paiseToRupees(wallets?.direct_balance ?? 0)}
           icon={Wallet}
           gradient="from-primary/25 to-primary/5"
           delay={200}
@@ -330,7 +336,7 @@ export default function DashboardPage() {
         />
         <WalletCard
           title="Team Wallet (binary income)"
-          balance={wallets?.team_balance ?? 0}
+          balance={paiseToRupees(wallets?.team_balance ?? 0)}
           icon={Users2}
           gradient="from-accent-gold/25 to-accent-gold/5"
           delay={300}
@@ -353,8 +359,8 @@ export default function DashboardPage() {
             <BinaryStatus
               leftCount={binary?.left.count ?? 0}
               rightCount={binary?.right.count ?? 0}
-              leftVolume={binary?.left.volume ?? 0}
-              rightVolume={binary?.right.volume ?? 0}
+              leftVolume={paiseToRupees(binary?.left.volume ?? 0)}
+              rightVolume={paiseToRupees(binary?.right.volume ?? 0)}
               leftActive={binary?.left.activeCount ?? 0}
               rightActive={binary?.right.activeCount ?? 0}
             />
@@ -397,14 +403,14 @@ export default function DashboardPage() {
                 <span>
                   Direct:{' '}
                   <span className="font-semibold text-text-primary tabular-nums">
-                    {formatCurrency(wallets?.direct_balance ?? 0)}
+                    {formatCurrency(paiseToRupees(wallets?.direct_balance ?? 0))}
                   </span>
                 </span>
                 <span className="text-text-muted">·</span>
                 <span>
                   Team:{' '}
                   <span className="font-semibold text-text-primary tabular-nums">
-                    {formatCurrency(wallets?.team_balance ?? 0)}
+                    {formatCurrency(paiseToRupees(wallets?.team_balance ?? 0))}
                   </span>
                 </span>
               </div>
