@@ -1,0 +1,2373 @@
+openapi: 3.0.3
+info:
+  title: FMCG-Binary API
+  version: 1.0.10
+  description: |
+    API for the FMCG-Binary MLM commission platform.
+
+    **v2 changes (April 2026):**
+    - Lifetime income caps (`max_direct_cap`, `max_binary_cap`) removed entirely.
+    - Packages now only control `daily_binary_cap` (daily binary ceiling per user).
+    - Monthly shopping gate introduced: if a networker's cumulative monthly income
+      exceeds ₹25,000 (2,500,000 paise) they must spend ₹2,500+ (250,000 paise) on
+      Secure-Mart products in the same month. Credits earned while the gate is open
+      are quarantined in `held_income` (HELD) and released atomically once the
+      shopping condition is met. Unmet balances are forfeited at month rollover.
+    - `/me` profile now includes `monthly_income_paise`, `monthly_shopping_paise`,
+      `income_period_ym`.
+    - Package activation: `topped_up` action removed; only `activated`, `upgraded`,
+      `none` are possible.
+
+    Auth models:
+    - Networker/Admin APIs use JWT (`Authorization: Bearer <token>`).
+    - FMCG platform APIs use API key auth (`X-API-Key`, `X-API-Secret`).
+
+    Sponsor identifier:
+    - `sponsor_id` is the **human sponsor code** like `SPF00001`.
+    - For backward-compatibility, some endpoints may also accept a UUID `user_id` in `sponsor_id` and will resolve it.
+
+servers:
+  - url: http://localhost:3100
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: FMCG (API Key)
+  - name: Networker (JWT)
+  - name: Admin (JWT)
+  - name: Profile
+  - name: KYC
+  - name: P2P
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  service: { type: string }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login (networker or admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/users/register:
+    post:
+      tags: [FMCG (API Key)]
+      summary: Register networker user from FMCG platform
+      security:
+        - fmcgApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FMCGRegisterRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/users/sync:
+    post:
+      tags: [FMCG (API Key)]
+      summary: Sync user profile from FMCG to Binary
+      security:
+        - fmcgApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSyncRequest"
+      responses:
+        "200":
+          description: Synced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/users/lookup:
+    get:
+      tags: [FMCG (API Key)]
+      summary: Look up a networker by email, phone, sponsor_id, or user_id
+      description: |
+        Returns a combined snapshot (profile + current package + sponsor +
+        wallets + KYC + placement + recent directs) for a networker. Intended
+        for FMCG support consoles and checkout flows that otherwise have to
+        stitch together `/users/:userId/check` + `/me` + other calls.
+
+        Exactly **one** query parameter must be supplied. Multiple or missing
+        parameters return `400`.
+
+        Identifier normalisation:
+        - `email` is lower-cased before lookup.
+        - `sponsor_id` is upper-cased (SPF codes are stored upper-case).
+        - `phone` is matched verbatim, including the country-code prefix.
+        - `user_id` is the Binary UUID (`networker_users.user_id`).
+      security:
+        - fmcgApiKey: []
+      parameters:
+        - in: query
+          name: email
+          required: false
+          schema: { type: string, format: email }
+          example: ravi@example.com
+        - in: query
+          name: phone
+          required: false
+          schema: { type: string }
+          example: "+919876543210"
+        - in: query
+          name: sponsor_id
+          required: false
+          schema: { type: string }
+          example: SPF00001
+        - in: query
+          name: user_id
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: User lookup snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserLookupResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/purchase:
+    post:
+      tags: [FMCG (API Key)]
+      summary: Process purchase event, distribute commissions, and record shopping
+      description: |
+        Single entry point for all Secure-Mart purchase events. For each call:
+
+        1. **BV distribution** — BV is distributed up the binary tree; pair matches and level
+           bonuses are calculated at each ancestor and credited to their team wallets (subject
+           to daily binary cap; excess is forfeited, not deferred).
+        2. **Direct / franchise commission** — sponsor earns 10% of BV (configurable).
+           Franchise commission applies when the buyer is under a franchise node.
+        3. **Monthly shopping gate (v2)** — all commission credits above pass through the
+           activation rule. If the recipient's cumulative monthly income has already crossed
+           ₹25,000 and they have NOT yet shopped ₹2,500 this month, the credit is quarantined
+           in `held_income` (HELD) rather than written to the wallet ledger. Credits are
+           released atomically once the shopping condition is satisfied.
+        4. **Package auto-activation** — for `user_type=networker`, the purchase amount is
+           matched against package tiers and the user is activated/upgraded if applicable
+           (see `/fmcg/packages/process`).
+        5. **Shopping counter update** — for `user_type=networker` with `total_amount > 0`,
+           the buyer's `monthly_shopping_paise` counter is incremented. If crossing ₹2,500
+           in the same call, any HELD income rows for the current month are released
+           immediately.
+
+        Response `data` shape includes:
+        - `commission_result` — direct, binary, franchise, level details (each with `held` flag).
+        - `package_activation` — `PackageActivationResult` (for networker buyers).
+        - `shopping` — `ShoppingResult` (for networker buyers with `total_amount > 0`).
+
+        Idempotent on `order_id` — replaying the same order_id is a no-op.
+      security:
+        - fmcgApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseEvent"
+      responses:
+        "200":
+          description: Purchase processed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          commission_result:
+                            type: object
+                            description: Per-source commission outcomes (direct, binary, franchise, level).
+                            properties:
+                              direct:
+                                type: object
+                                properties:
+                                  amount: { type: integer, format: int64 }
+                                  held: { type: boolean }
+                                  held_amount: { type: integer, format: int64 }
+                              binary:
+                                type: object
+                                properties:
+                                  amount: { type: integer, format: int64 }
+                                  held: { type: boolean }
+                                  held_amount: { type: integer, format: int64 }
+                              franchise:
+                                type: object
+                                properties:
+                                  amount: { type: integer, format: int64 }
+                                  held: { type: boolean }
+                                  held_amount: { type: integer, format: int64 }
+                          package_activation:
+                            $ref: "#/components/schemas/PackageActivationResult"
+                          shopping:
+                            $ref: "#/components/schemas/ShoppingResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/users/{userId}/check:
+    get:
+      tags: [FMCG (API Key)]
+      summary: Check a user on Binary (is_networker, status, package)
+      security:
+        - fmcgApiKey: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/packages/match:
+    get:
+      tags: [FMCG (API Key)]
+      summary: Read-only lookup — best-fit package tier for a given amount
+      description: |
+        Returns the highest-value ACTIVE package whose `amount <= amount` query
+        parameter, or `matched=false` if no tier fits. Safe to call before a
+        purchase (e.g. cart preview). No state changes.
+      security:
+        - fmcgApiKey: []
+      parameters:
+        - in: query
+          name: amount
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Purchase amount in paise
+      responses:
+        "200":
+          description: Match result (either a package or `matched=false`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/fmcg/packages/process:
+    post:
+      tags: [FMCG (API Key)]
+      summary: Auto-activate / upgrade a networker's package by purchase amount
+      description: |
+        Called by FMCG whenever a networker makes a Secure-Mart purchase.
+        Applies the following rules (v2 — lifetime caps removed):
+
+        1. **Amount below smallest tier** → `action = "none"` (no changes).
+        2. **No current package** on user → `action = "activated"` — package assigned,
+           `daily_binary_cap` set to the matched tier's cap, user status → ACTIVE.
+        3. **Matched tier is HIGHER than current** → `action = "upgraded"` — `current_package_id`
+           switches to the higher tier, `daily_binary_cap` updated to the higher tier's value.
+        4. **Matched tier ≤ current** → `action = "none"` — no changes (there are no lifetime
+           caps to extend, so a same-tier or lower-tier purchase is a no-op for package state).
+        5. **User is not a networker** → `action = "none"`.
+
+        Note: `/api/v1/fmcg/purchase` invokes this flow automatically for `user_type = "networker"`
+        purchases, so callers typically do not need to hit this endpoint directly.
+      security:
+        - fmcgApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackageProcessRequest"
+      responses:
+        "200":
+          description: Activation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me:
+    get:
+      tags: [Networker (JWT)]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserProfileResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/wallets:
+    get:
+      tags: [Networker (JWT)]
+      summary: Get wallet balances
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/wallets/{type}/ledger:
+    get:
+      tags: [Networker (JWT)]
+      summary: Get ledger entries for wallet type
+      description: |
+        Paginated list (`success`, `data`, `meta`). Amounts are in **paise**; `amount` is always positive — use `entry_type` (`CREDIT` | `DEBIT`) for direction.
+
+        **Wallet page:** merge `DIRECT` and `TEAM` ledgers (e.g. `limit=100` each).
+
+        **Income page (`/income`):** client filters **CREDIT** rows by `source`:
+        - **Direct tab:** `type=DIRECT` and `source` in `DIRECT_COMMISSION`, `FRANCHISE_COMMISSION`
+        - **Binary tab:** `type=TEAM` and `source=BINARY_MATCH`
+        - **Level tab:** `type=TEAM` and `source=LEVEL_BONUS`  
+        Withdrawals, P2P, and admin rows use other `source` values and are excluded from those tabs.
+        Summary cards and tables use the same rules, filtered by a **date range** on the client (`created_at`).
+        Fetch **all pages** (`meta.total_pages`, `limit=100`) per wallet so “All time” sums stay complete up to API limits.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [DIRECT, TEAM]
+        - in: query
+          name: page
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Paginated ledger rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLedgerEnvelope"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/tree:
+    get:
+      tags: [Networker (JWT)]
+      summary: Get binary tree (current user)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/commissions:
+    get:
+      tags: [Networker (JWT)]
+      summary: List commissions (current user)
+      description: |
+        **Stub:** returns paging metadata and a note to use `GET /api/v1/wallets/{DIRECT|TEAM}/ledger`
+        for commission-line history. The User app **Income** screen uses wallet ledgers (paged) with client date-range filters.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Stub response (prefer wallet ledgers for income UI)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/avatar:
+    post:
+      tags: [Networker (JWT)]
+      summary: Upload profile photo (multipart field `file`, JPEG/PNG)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Avatar stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/payout-upi:
+    post:
+      tags: [Networker (JWT)]
+      summary: Set payout UPI id (login password re-auth)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payout_upi_id, login_password]
+              properties:
+                payout_upi_id:
+                  type: string
+                login_password:
+                  type: string
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/team:
+    get:
+      tags: [Networker (JWT)]
+      summary: List downline on LEFT or RIGHT leg
+      description: |
+        Returns every descendant on the chosen leg (LEFT or RIGHT) relative to
+        the authenticated networker — not just direct referrals. Each row
+        includes the member's own `volume` (left_bv + right_bv flowing under
+        their node), whether they are a direct sponsored user (`is_direct`),
+        their depth from the caller, active package name and join date. Used
+        by the My Team page (/team) to populate the left/right team tabs.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: side
+          required: true
+          schema: { type: string, enum: [LEFT, RIGHT] }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100, maximum: 500 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Team members list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          side: { type: string, enum: [LEFT, RIGHT] }
+                          count: { type: integer }
+                          members:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/TeamMember"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/team/stats:
+    get:
+      tags: [Networker (JWT)]
+      summary: Team summary stats (both legs combined)
+      description: |
+        Aggregates the caller's entire downline: total members, active members,
+        new members joined in the last 7 days, left/right member counts and
+        left/right BV volumes (read from the caller's own `binary_tree` row).
+        Used by the header cards on the /team page.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Team stats
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/TeamStatsView"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/referrals:
+    get:
+      tags: [Networker (JWT)]
+      summary: List my direct referrals (sponsored downline)
+      description: |
+        Returns networker users whose sponsor is the caller, along with each
+        referral's current placement leg (LEFT/RIGHT), placement status
+        (PLACED / PENDING_PLACEMENT), status, active package name and
+        current-month income (`total_direct_earned` field, kept for backward
+        compatibility — value is now monthly, not lifetime). Used by the Invite & Earn page.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 200 }
+        - in: query
+          name: offset
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Direct referrals list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DirectReferral"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/users/create:
+    post:
+      tags: [Networker (JWT)]
+      summary: Create a new networker under current user (dashboard create)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/payouts/schedule:
+    get:
+      tags: [Networker (JWT)]
+      summary: Withdrawal schedule (IST window, allowed calendar days, fee percents)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Schedule for withdraw UI
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          server_now_ist:
+                            type: string
+                          ist_start_hour:
+                            type: integer
+                          ist_end_hour:
+                            type: integer
+                          within_time_window:
+                            type: boolean
+                          min_withdrawal_paise:
+                            type: integer
+                          service_charge_percent:
+                            type: number
+                          tds_percent:
+                            type: number
+                          allowed_dates_direct:
+                            type: array
+                            items:
+                              type: integer
+                          allowed_dates_team:
+                            type: array
+                            items:
+                              type: integer
+                          today_allowed_for_direct:
+                            type: boolean
+                          today_allowed_for_team:
+                            type: boolean
+                          max_percent_of_monthly_income:
+                            type: integer
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/payouts/request:
+    post:
+      tags: [Networker (JWT)]
+      summary: Request payout (withdrawal)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wallet_type, amount, transaction_password]
+              properties:
+                wallet_type:
+                  type: string
+                  enum: [DIRECT, TEAM]
+                amount:
+                  type: integer
+                  description: Amount in paise (gross)
+                transaction_password:
+                  type: string
+                payment_method:
+                  type: string
+                  description: Optional; defaults to SECURE_WALLET (only supported value).
+                  enum: [SECURE_WALLET]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/payouts:
+    get:
+      tags: [Networker (JWT)]
+      summary: List payout requests (current user)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated payout list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/placement-requests:
+    get:
+      tags: [Networker (JWT)]
+      summary: List pending placement requests for current user (as sponsor)
+      description: |
+        Returns placement requests where the logged-in user is the sponsor.
+        Only PENDING requests are shown. The sponsor must decide left/right
+        placement within 48 hours, after which the system auto-places on the
+        weaker subtree.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Placement requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/placement-requests/{id}/decide:
+    post:
+      tags: [Networker (JWT)]
+      summary: Decide placement leg for a pending request
+      description: |
+        The sponsor chooses LEFT or RIGHT for the pending user. The user is
+        immediately placed in the binary tree and any held binary BV is
+        replayed through DistributeBVAndMatch for all uplines.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlacementDecideRequest"
+      responses:
+        "200":
+          description: User placed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/packages:
+    get:
+      tags: [Networker (JWT)]
+      summary: List active packages (public tiers for dashboard / renew)
+      description: |
+        Returns all **ACTIVE** packages sorted for display (use `sort_order`, then amount).
+        Amounts and `daily_binary_cap` are in **paise**. Same rows power **Add Member** package pickers.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Package array
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/packages/renew:
+    post:
+      tags: [Networker (JWT)]
+      summary: Renew/upgrade package for current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [package_id]
+              properties:
+                package_id: { type: string }
+      responses:
+        "200":
+          description: Renewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/config/packages:
+    get:
+      tags: [Admin (JWT)]
+      summary: List packages
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Packages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Admin (JWT)]
+      summary: Create package
+      description: |
+        Creates a new package tier. Packages now only control `daily_binary_cap`
+        (v2: lifetime cap multipliers have been removed).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, amount, daily_binary_cap, sort_order]
+              properties:
+                name: { type: string }
+                amount: { type: integer, description: Amount in paise }
+                daily_binary_cap:
+                  type: integer
+                  description: Paise — max binary income per calendar day for users on this tier. 0 = no daily cap.
+                sort_order: { type: integer }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/config/packages/{id}:
+    put:
+      tags: [Admin (JWT)]
+      summary: Update package
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                amount: { type: integer, description: Paise }
+                daily_binary_cap: { type: integer, description: "Paise — 0 = no daily cap" }
+                status: { type: string, enum: [ACTIVE, INACTIVE] }
+                sort_order: { type: integer }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/config/commissions:
+    get:
+      tags: [Admin (JWT)]
+      summary: List commission configs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Config list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Admin (JWT)]
+      summary: Update commission config
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/config/level-bonus:
+    get:
+      tags: [Admin (JWT)]
+      summary: List level bonus slabs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Slab list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Admin (JWT)]
+      summary: Upsert level bonus slabs
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/config/payout:
+    get:
+      tags: [Admin (JWT)]
+      summary: List payout configs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Config list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+    put:
+      tags: [Admin (JWT)]
+      summary: Update payout config
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users:
+    get:
+      tags: [Admin (JWT)]
+      summary: List users (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema: { type: string }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/payouts:
+    get:
+      tags: [Admin (JWT)]
+      summary: List payout requests (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Payout list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/placement-requests:
+    get:
+      tags: [Admin (JWT)]
+      summary: List all placement requests (admin audit)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, AUTO_PLACED, ADMIN_PLACED]
+      responses:
+        "200":
+          description: Placement requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/placement-requests/{id}/decide:
+    post:
+      tags: [Admin (JWT)]
+      summary: Admin force-decide a placement request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlacementDecideRequest"
+      responses:
+        "200":
+          description: Placed by admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/payouts/{id}/approve:
+    post:
+      tags: [Admin (JWT)]
+      summary: Approve payout request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/payouts/{id}/reject:
+    post:
+      tags: [Admin (JWT)]
+      summary: Reject payout request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /me/password:
+    post:
+      tags: [Profile]
+      summary: Change login password
+      description: |
+        Rotates the authenticated networker's login password. The current
+        password is required so a stolen session alone cannot silently
+        swap the password.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                  example: Old@Password1
+                new_password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  example: New@Password1
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /me/transaction-password:
+    post:
+      tags: [Profile]
+      summary: Set or change transaction password
+      description: |
+        Sets (first-time) or rotates the transaction password used to
+        authorise P2P transfers (networker → networker) and other high-risk
+        wallet actions. The login password is always required;
+        `current_transaction_password` is required only when the user
+        already has one.
+
+        UI: check `has_transaction_password` on GET /me to decide whether
+        to show "Set transaction password" (false) or "Change transaction
+        password" (true).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_password, new_transaction_password]
+              properties:
+                login_password:
+                  type: string
+                  format: password
+                  example: MyLoginPassword1
+                current_transaction_password:
+                  type: string
+                  format: password
+                  description: Required only when changing an existing txn password.
+                new_transaction_password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  example: MyTxn@1234
+      responses:
+        "200":
+          description: Transaction password saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /me/email:
+    post:
+      tags: [Profile]
+      summary: Change email (OTP-verified)
+      description: |
+        Rotates the networker's email. Requires:
+          1. The new email is OTP-verified on the client (`otp_verified: true`).
+          2. The current login password (re-auth) so a stolen session alone
+             cannot move the recovery channel.
+
+        When a server-side OTP backend lands, `otp_verified` will be replaced
+        by a short-lived server-signed verification token. The endpoint
+        signature (method, path, body shape) will stay backward-compatible.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_email, login_password]
+              properties:
+                new_email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+                login_password:
+                  type: string
+                  format: password
+                otp_verified:
+                  type: boolean
+                  description: Must be true.
+                  example: true
+      responses:
+        "200":
+          description: Email updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /me/phone:
+    post:
+      tags: [Profile]
+      summary: Change phone (OTP-verified)
+      description: |
+        Rotates the networker's phone number (must include country code,
+        e.g. `+919876543210`). Same auth rules as `/me/email`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_phone, login_password]
+              properties:
+                new_phone:
+                  type: string
+                  example: "+919876543210"
+                login_password:
+                  type: string
+                  format: password
+                otp_verified:
+                  type: boolean
+                  example: true
+      responses:
+        "200":
+          description: Phone updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /p2p/lookup:
+    get:
+      tags: [P2P]
+      summary: Look up a P2P receiver by SPF sponsor id
+      description: |
+        Resolves a sponsor id (e.g. `SPF00042`) to a networker and reports
+        whether the account is eligible to receive a transfer. Used by the
+        sender's UI to populate the "Receiver Name" read-only field and
+        gate the Transfer button.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: sponsor_id
+          required: true
+          schema:
+            type: string
+            example: SPF00042
+      responses:
+        "200":
+          description: Lookup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    $ref: "#/components/schemas/P2PLookupResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /p2p/quote:
+    get:
+      tags: [P2P]
+      summary: Get P2P config and (optionally) a fee quote
+      description: |
+        Returns the platform P2P config and, when `amount` is supplied, the
+        service charge and net amount that will be credited to the receiver.
+        All amounts are in paise.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: amount
+          required: false
+          schema:
+            type: integer
+            format: int64
+            description: Gross transfer amount in paise. Defaults to 0 (config only).
+            example: 100000
+      responses:
+        "200":
+          description: Quote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    $ref: "#/components/schemas/P2PQuoteResponse"
+
+  /p2p/transfer:
+    post:
+      tags: [P2P]
+      summary: Execute a peer-to-peer transfer
+      description: |
+        Moves value from the caller's Main (DIRECT) wallet to the receiver's
+        Main wallet. The sender is debited for the gross `amount`, the
+        receiver is credited with `amount - service_charge`, and the
+        `service_charge` is retained by the platform (recorded per transfer
+        in `p2p_transfers`).
+
+        Preconditions:
+          - Both sender and receiver are ACTIVE networkers.
+          - `amount` ≥ configured `min_amount_paise`.
+          - Caller has a stored transaction password and the supplied one
+            matches.
+          - Caller's DIRECT balance at commit time ≥ `amount`.
+
+        Concurrency: the service takes a per-sender advisory lock inside
+        the pg transaction so two parallel transfers from the same sender
+        cannot both pass the balance check.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/P2PTransferRequest"
+      responses:
+        "200":
+          description: Transfer recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    $ref: "#/components/schemas/P2PTransfer"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /p2p/transfers:
+    get:
+      tags: [P2P]
+      summary: List my P2P transfer history (IN + OUT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedMeta"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/P2PTransfer"
+
+  /kyc/me:
+    get:
+      tags: [KYC]
+      summary: Get my KYC status + documents
+      description: |
+        Returns the caller's KYC request (one-per-user). `request` is `null`
+        until the user uploads at least one document. `rejection_reason` is
+        populated when status is REJECTED so the UI can show the admin's
+        explanation and guide a re-upload.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      request:
+                        oneOf:
+                          - { $ref: "#/components/schemas/KYCRequest" }
+                          - { type: "null" }
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /kyc/documents:
+    post:
+      tags: [KYC]
+      summary: Upload a KYC document
+      description: |
+        Multipart upload (`document_type` + `file`). Accepted types:
+        PAN_CARD, AADHAAR_FRONT, AADHAAR_BACK, AADHAAR_CARD, BANK_PASSBOOK,
+        OTHER. Only jpeg/png/pdf are accepted, max 15 MB.
+
+        Uploads are blocked while the request is APPROVED or SUBMITTED.
+        When the previous request is REJECTED, the first upload clears the
+        old documents and reopens the request for re-submission.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document_type, file]
+              properties:
+                document_type:
+                  type: string
+                  enum: [PAN_CARD, AADHAAR_FRONT, AADHAAR_BACK, AADHAAR_CARD, BANK_PASSBOOK, OTHER]
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Document stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: "#/components/schemas/KYCDocument" }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+
+  /kyc/submit:
+    post:
+      tags: [KYC]
+      summary: Submit uploaded documents for review
+      description: |
+        Moves the request from PENDING to SUBMITTED. Requires at least
+        one uploaded document. After submission, uploads are blocked until
+        the admin approves or rejects.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /admin/kyc/requests:
+    get:
+      tags: [KYC-Admin]
+      summary: List KYC requests (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, SUBMITTED, APPROVED, REJECTED] }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessAnyResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /admin/kyc/requests/{kycId}:
+    get:
+      tags: [KYC-Admin]
+      summary: Get a KYC request with presigned download URLs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: kycId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Request snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: "#/components/schemas/KYCRequest" }
+        "401":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [KYC-Admin]
+      summary: Approve or reject a KYC request
+      description: |
+        Status must be `APPROVED` or `REJECTED`. When rejecting, a
+        non-empty `rejection_reason` is required — it is shown to the
+        user on their profile so they know what to fix.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: kycId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+                rejection_reason:
+                  type: string
+                  description: Required when status is REJECTED.
+                  example: "PAN card photo is blurry — please re-upload a clear scan."
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    fmcgApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Requires both `X-API-Key` and `X-API-Secret` headers.
+
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+
+    SuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data: { nullable: true }
+
+    SuccessAnyResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data: {}
+        meta: {}
+
+    SuccessUserResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/User"
+
+    SuccessUserProfileResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/UserProfile"
+
+    LedgerEntry:
+      type: object
+      description: One ledger movement for the caller's DIRECT or TEAM wallet.
+      properties:
+        id: { type: integer, format: int64 }
+        user_id: { type: string, format: uuid }
+        wallet_type: { type: string, enum: [DIRECT, TEAM] }
+        amount:
+          type: integer
+          format: int64
+          description: Paise (positive); direction is `entry_type`.
+        entry_type: { type: string, enum: [CREDIT, DEBIT] }
+        source:
+          type: string
+          description: |
+            Business line, e.g. `DIRECT_COMMISSION`, `BINARY_MATCH`, `LEVEL_BONUS`,
+            `WITHDRAWAL`, `P2P_TRANSFER`, `FRANCHISE_COMMISSION`, `ADMIN_ADJUSTMENT`.
+        reference_id: { type: string, nullable: true }
+        reference_type: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    PaginatedLedgerEnvelope:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/LedgerEntry" }
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer, format: int64 }
+            total_pages: { type: integer, format: int64 }
+
+    SuccessUserLookupResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          $ref: "#/components/schemas/UserLookupResponse"
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      description: |
+        The `email` field accepts any of:
+          - email address (e.g. `user@test.com`)
+          - SPF ID (e.g. `SPF00001`, case-insensitive)
+          - phone number (exact match)
+        The field name is kept as `email` for backward compatibility.
+      properties:
+        email:
+          type: string
+          description: Email, SPF ID, or phone number
+          example: SPF00001
+        password: { type: string }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            user: { $ref: "#/components/schemas/User" }
+            access_token: { type: string }
+            refresh_token: { type: string }
+
+    User:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        sponsor_id:
+          type: string
+          description: User's unique sponsor code (SPF00001)
+          example: SPF00001
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        status: { type: string, example: ACTIVE }
+        role: { type: string, example: NETWORKER }
+        current_package_id: { type: string, format: uuid, nullable: true }
+        package_activated_at: { type: string, format: date-time, nullable: true }
+        monthly_income_paise:
+          type: integer
+          format: int64
+          description: |
+            Paise — cumulative income (direct + binary + franchise + level) credited
+            this calendar month. Resets on the first write of a new month (lazy rollover).
+            Drives the monthly shopping gate threshold (> ₹25,000 = 2,500,000 paise).
+        monthly_shopping_paise:
+          type: integer
+          format: int64
+          description: |
+            Paise — total of this user's own product purchases (event.total_amount)
+            in the current calendar month. Must reach ₹2,500 (250,000 paise) in months
+            where monthly_income_paise has crossed ₹25,000, otherwise new credits are held.
+        income_period_ym:
+          type: integer
+          description: |
+            Current period identifier as YYYY*100+MM (e.g. 202604 for April 2026).
+            When this differs from the server's current YM, monthly counters are zeroed
+            on the next write.
+          example: 202604
+        today_binary_earned:
+          type: integer
+          format: int64
+          description: |
+            Paise credited toward team wallet from binary (pair + level bonus) today.
+            Resets at 12:01 AM (cron). Income above `daily_binary_cap` in a single day
+            is not deferred — only the capped amount is paid; the rest is forfeited.
+        daily_binary_cap:
+          type: integer
+          format: int64
+          description: |
+            Paise — maximum binary income (team wallet credits) per calendar day for this user.
+            Excess is not carried forward to the next day as income (forfeited).
+            0 means no daily cap enforced.
+        placement_status:
+          type: string
+          enum: [PLACED, PENDING_PLACEMENT]
+          description: |
+            PLACED = user is in the binary tree.
+            PENDING_PLACEMENT = FMCG signup without leg; sponsor must decide within 48h.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    UserProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            package_name: { type: string, nullable: true }
+            package_amount: { type: integer, nullable: true, description: Paise }
+            direct_wallet_balance: { type: integer, description: Paise }
+            team_wallet_balance: { type: integer, description: Paise }
+            direct_referral_count: { type: integer }
+            sponsor_name: { type: string, nullable: true }
+            sponsor_sponsor_id:
+              type: string
+              nullable: true
+              description: SPF id of the user's sponsor (e.g. SPF00001).
+            has_transaction_password:
+              type: boolean
+              description: |
+                True when the networker has already set a transaction
+                password. Drives the UI between "Set transaction password"
+                (false) and "Change transaction password" (true).
+            kyc_status:
+              type: string
+              nullable: true
+              enum: [PENDING, SUBMITTED, APPROVED, REJECTED]
+              description: Present only when a KYC request exists.
+            kyc_rejection_reason:
+              type: string
+              nullable: true
+              description: Shown on profile when the admin has rejected the latest KYC submission.
+
+    UserLookupResponse:
+      type: object
+      description: |
+        Aggregate response returned by `GET /api/v1/fmcg/users/lookup`.
+        Combines the user's core profile with sponsor (upline), current
+        package, wallet balances, KYC, placement (tree leg), and the 5 most
+        recent direct referrals.
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        package:
+          allOf:
+            - $ref: "#/components/schemas/UserLookupPackage"
+          nullable: true
+        sponsor:
+          allOf:
+            - $ref: "#/components/schemas/UserLookupSponsor"
+          nullable: true
+        wallets:
+          $ref: "#/components/schemas/UserLookupWallets"
+        direct_referral_count:
+          type: integer
+          example: 12
+        kyc:
+          allOf:
+            - $ref: "#/components/schemas/UserLookupKYC"
+          nullable: true
+        placement:
+          $ref: "#/components/schemas/UserLookupPlacement"
+        avatar_url:
+          type: string
+          nullable: true
+          description: Short-lived presigned URL (24h) when the user has uploaded an avatar.
+        recent_referrals:
+          type: array
+          items: { $ref: "#/components/schemas/DirectReferral" }
+          description: Up to 5 most recent direct referrals.
+
+    UserLookupPackage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Silver }
+        amount: { type: integer, format: int64, description: Paise }
+        daily_binary_cap:
+          type: integer
+          format: int64
+          description: Paise — max binary income per day for this tier. 0 = no daily cap.
+        activated_at: { type: string, format: date-time, nullable: true }
+
+    UserLookupSponsor:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        sponsor_id: { type: string, example: SPF00001 }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE, BLOCKED] }
+
+    UserLookupWallets:
+      type: object
+      properties:
+        direct_balance: { type: integer, format: int64, description: Paise }
+        team_balance: { type: integer, format: int64, description: Paise }
+        total_balance: { type: integer, format: int64, description: Paise }
+
+    UserLookupKYC:
+      type: object
+      description: Present only when the user has a KYC request on record.
+      properties:
+        status:
+          type: string
+          enum: [PENDING, SUBMITTED, APPROVED, REJECTED]
+        submitted_at: { type: string, format: date-time, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        rejection_reason: { type: string, nullable: true }
+
+    UserLookupPlacement:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [PLACED, PENDING_PLACEMENT]
+        leg:
+          type: string
+          enum: [LEFT, RIGHT]
+          nullable: true
+          description: Null when placement_status is PENDING_PLACEMENT (or root/admin node).
+
+    KYCRequest:
+      type: object
+      properties:
+        kyc_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, SUBMITTED, APPROVED, REJECTED]
+        rejection_reason:
+          type: string
+          nullable: true
+        admin_id: { type: string, format: uuid, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/KYCDocument" }
+
+    KYCDocument:
+      type: object
+      properties:
+        document_id: { type: string, format: uuid }
+        kyc_id: { type: string, format: uuid }
+        document_type:
+          type: string
+          enum: [PAN_CARD, AADHAAR_CARD, AADHAAR_FRONT, AADHAAR_BACK, BANK_PASSBOOK, OTHER]
+        file_name: { type: string, nullable: true }
+        file_size: { type: integer, format: int64, nullable: true }
+        mime_type: { type: string, nullable: true }
+        download_url:
+          type: string
+          nullable: true
+          description: Presigned GET URL, valid for 1 hour. Only returned to admins on the single-request endpoint.
+        uploaded_at: { type: string, format: date-time }
+
+    P2PLookupResponse:
+      type: object
+      properties:
+        sponsor_id: { type: string, example: SPF00042 }
+        full_name: { type: string, example: Alice Doe }
+        status: { type: string, enum: [ACTIVE, INACTIVE, BLOCKED] }
+        eligible: { type: boolean }
+        reason:
+          type: string
+          description: Reason the receiver is not eligible (empty when eligible).
+          example: receiver account is not active
+
+    P2PQuoteResponse:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        min_amount_paise: { type: integer, format: int64, example: 10000 }
+        service_charge_percent: { type: number, format: float, example: 2 }
+        amount: { type: integer, format: int64, example: 100000 }
+        service_charge: { type: integer, format: int64, example: 2000 }
+        net_amount: { type: integer, format: int64, example: 98000 }
+
+    P2PTransferRequest:
+      type: object
+      required: [receiver_sponsor_id, amount, transaction_password]
+      properties:
+        receiver_sponsor_id:
+          type: string
+          example: SPF00042
+        amount:
+          type: integer
+          format: int64
+          description: Gross amount in paise. Must be ≥ configured min and ≤ sender's DIRECT balance.
+          example: 100000
+        transaction_password:
+          type: string
+          format: password
+          example: MyTxn@1234
+        note:
+          type: string
+          example: Rent for April
+
+    P2PTransfer:
+      type: object
+      properties:
+        transfer_id: { type: string, format: uuid }
+        sender_user_id: { type: string, format: uuid }
+        receiver_user_id: { type: string, format: uuid }
+        sender_sponsor_id: { type: string, example: SPF00001 }
+        receiver_sponsor_id: { type: string, example: SPF00042 }
+        wallet_type: { type: string, enum: [DIRECT, TEAM] }
+        amount:
+          type: integer
+          format: int64
+          description: Gross amount in paise, debited from sender.
+        service_charge:
+          type: integer
+          format: int64
+          description: Platform fee retained, in paise.
+        net_amount:
+          type: integer
+          format: int64
+          description: Amount credited to receiver (amount - service_charge).
+        note: { type: string, nullable: true }
+        debit_ledger_id: { type: integer, format: int64, nullable: true }
+        credit_ledger_id: { type: integer, format: int64, nullable: true }
+        created_at: { type: string, format: date-time }
+        direction:
+          type: string
+          enum: [OUT, IN]
+          description: POV marker for the caller (only present on list endpoints).
+        counterparty_name:
+          type: string
+          description: Full name of the counterparty (only present on list endpoints).
+
+    TeamMember:
+      type: object
+      description: One descendant on a given leg of the caller's binary tree.
+      properties:
+        user_id: { type: string, format: uuid }
+        sponsor_id: { type: string, example: SPF00042 }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        status: { type: string, enum: [ACTIVE, INACTIVE, BLOCKED] }
+        package_name: { type: string, nullable: true }
+        leg:
+          type: string
+          enum: [LEFT, RIGHT]
+          description: Side of the caller's tree this member sits on.
+        is_direct: { type: boolean, description: True when the caller is the direct sponsor. }
+        volume:
+          type: integer
+          description: BV flowing under this member's node (left_bv + right_bv, paise).
+        depth: { type: integer, description: Hops from the caller (1 = direct child). }
+        joined_at: { type: string, format: date-time }
+
+    TeamStatsView:
+      type: object
+      properties:
+        total_members: { type: integer }
+        active_members: { type: integer }
+        new_this_week: { type: integer }
+        left_count: { type: integer }
+        right_count: { type: integer }
+        left_volume: { type: integer, description: Paise }
+        right_volume: { type: integer, description: Paise }
+        total_volume: { type: integer, description: Paise }
+
+    DirectReferral:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        sponsor_id: { type: string, example: SPF00042 }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE, BLOCKED] }
+        placement_status: { type: string, enum: [PLACED, PENDING_PLACEMENT] }
+        leg:
+          type: string
+          enum: [LEFT, RIGHT]
+          nullable: true
+          description: Tree leg where user was placed. Null when placement_status is PENDING_PLACEMENT.
+        package_name: { type: string, nullable: true }
+        total_direct_earned:
+          type: integer
+          format: int64
+          description: |
+            Paise — this referral's own income for the **current calendar month**
+            (direct + binary + franchise + level). Field name kept for backward
+            compatibility with existing integrations; semantics changed from
+            lifetime to monthly in v2 (April 2026).
+        created_at: { type: string, format: date-time }
+
+    FMCGRegisterRequest:
+      type: object
+      required: [sponsor_id, full_name, email, password]
+      properties:
+        sponsor_id:
+          type: string
+          description: Sponsor code (SPF00001). (May also accept sponsor's UUID user_id for compatibility.)
+          example: SPF00001
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        password: { type: string }
+        leg:
+          type: string
+          enum: [LEFT, RIGHT]
+          description: |
+            Optional leg preference forwarded from the FMCG platform (typically
+            captured from a referral link like /ref/{left|right}/SPFxxxxx).
+
+            - If provided: the user is placed **immediately** on that leg
+              (BFS spill-over applied if the leg is already occupied) and the
+              regular binary commission flow runs on any purchase.
+            - If omitted: the user enters **PENDING_PLACEMENT** state and the
+              sponsor has 48h to decide via
+              `POST /me/placement-requests/:id/decide`. If the sponsor does not
+              act within 48h the system auto-places the user on the sponsor's
+              weaker leg and releases any pending binary commissions.
+        package_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Optional package UUID.
+
+            - If provided: the package is validated and the user is created as ACTIVE
+              with `daily_binary_cap` set to the package's value (v2: no lifetime caps).
+            - If omitted: the user is created as INACTIVE and can be activated later
+              by the FMCG purchase/package flow.
+
+    UserSyncRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string, format: uuid }
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+
+    CreateUserRequest:
+      type: object
+      required: [full_name, email, password, leg, package_id]
+      properties:
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        password: { type: string }
+        leg: { type: string, enum: [LEFT, RIGHT] }
+        package_id: { type: string, format: uuid }
+
+    PurchaseEvent:
+      type: object
+      required: [user_id, order_id, bv_amount]
+      properties:
+        user_id: { type: string, format: uuid }
+        order_id: { type: string }
+        bv_amount:
+          type: integer
+          description: BV amount in paise
+        total_amount:
+          type: integer
+          description: Total purchase amount in paise (MRP). Used for auto package activation matching.
+        user_type:
+          type: string
+          description: customer | networker | franchise | distributor (as used by FMCG platform)
+        franchise_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    PlacementDecideRequest:
+      type: object
+      required: [leg]
+      properties:
+        leg:
+          type: string
+          enum: [LEFT, RIGHT]
+
+    PlacementRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        sponsor_user_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, AUTO_PLACED, ADMIN_PLACED]
+        decided_leg: { type: string, enum: [LEFT, RIGHT], nullable: true }
+        decided_by: { type: string, format: uuid, nullable: true }
+        expires_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    PackageProcessRequest:
+      type: object
+      required: [user_id, amount]
+      properties:
+        user_id: { type: string, format: uuid }
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Purchase amount in paise (typically MRP). Matched against package tiers.
+        order_id:
+          type: string
+          description: Optional reference id for traceability
+
+    PackageActivationResult:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [none, activated, upgraded]
+          description: |
+            Result of the package-activation evaluation:
+            - `activated` — user had no package; now assigned to the matched tier.
+            - `upgraded` — matched tier is higher than current; daily cap updated.
+            - `none` — no change (amount below smallest tier, same/lower tier, or non-networker).
+        package_id: { type: string, format: uuid, nullable: true }
+        package_name: { type: string, nullable: true }
+        package_amount: { type: integer, format: int64, description: Paise }
+        daily_binary_cap:
+          type: integer
+          format: int64
+          description: Paise — new daily binary cap after this activation (0 = uncapped).
+        purchase_amount: { type: integer, format: int64, description: Paise }
+        message: { type: string }
+
+    ShoppingResult:
+      type: object
+      description: |
+        Present in `/fmcg/purchase` responses when `user_type=networker` and
+        `total_amount > 0`. Summarises the monthly shopping counter update and
+        any held-income releases triggered by the purchase.
+      properties:
+        monthly_shopping_paise:
+          type: integer
+          format: int64
+          description: Paise — updated cumulative shopping for the current month after this purchase.
+        released_count:
+          type: integer
+          description: Number of held_income rows released (0 when shopping gate was not crossed).
+        released_amount:
+          type: integer
+          format: int64
+          description: Total paise released from held_income to wallets (0 when none released).

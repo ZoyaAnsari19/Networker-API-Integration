@@ -1,0 +1,12 @@
+{
+  "name": "fmcg-binary-openapi-docs",
+  "private": true,
+  "scripts": {
+    "swagger": "node swagger-server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.7.0"
+  }
+}

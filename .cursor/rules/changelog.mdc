@@ -1,0 +1,23 @@
+---
+alwaysApply: true
+---
+
+Use sequential thinking ONLY for complex tasks like:
+- system design
+- architecture planning
+- multi-step logic
+- debugging complex issues
+
+Skip sequential thinking for simple or small tasks.
+
+After EVERY task, append below in the exact format.
+
+## [DD-MM-YYYY HH:MM] — short title
+
+**What changed:**  
+**Files touched:**  
+**API endpoints used:**  
+**Breaking change:** YES|NO  
+**Branch:** <current-branch-name>  
+
+---
