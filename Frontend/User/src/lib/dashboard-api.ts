@@ -29,6 +29,7 @@ function normalizeLedgerEntry(raw: Record<string, unknown>): LedgerEntry {
     reference_id: (raw.reference_id as string | null) ?? null,
     reference_type: (raw.reference_type as string | null) ?? null,
     description: (raw.description as string | null) ?? null,
+    payer_name: (raw.payer_name as string | null) ?? null,
     created_at: String(raw.created_at ?? new Date().toISOString()),
   };
 }

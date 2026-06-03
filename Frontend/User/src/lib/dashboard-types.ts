@@ -38,6 +38,7 @@ export interface LedgerEntry {
   reference_id: string | null;
   reference_type: string | null;
   description: string | null;
+  payer_name?: string | null;
   created_at: string;
 }
 

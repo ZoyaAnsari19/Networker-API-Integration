@@ -1,12 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import {
-  mockDelay,
-  mockDirectLedger,
-  mockTeamLedger,
-  type MockLedgerEntry,
-} from '@/lib/mock-api-data';
+import { fetchAllLedgerEntries } from '@/lib/dashboard-api';
+import type { LedgerEntry } from '@/lib/dashboard-types';
+import { devError, devLog } from '@/lib/dev-log';
 
 export type IncomeRangeKey = '7d' | '30d' | '90d' | 'all';
 
@@ -26,23 +23,13 @@ export type IncomeTableRow = {
   level?: number;
 };
 
-export type LedgerEntry = MockLedgerEntry;
-
 function humanizeSource(source: string): string {
   return source.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function getPayerName(e: LedgerEntry): string | null {
-  const anyE = e as LedgerEntry & Record<string, unknown>;
-  const candidates = [
-    anyE.payer_name,
-    anyE.from_name,
-    anyE.user_display_name,
-  ];
-  for (const c of candidates) {
-    if (typeof c === 'string' && c.trim()) return c.trim();
-  }
-  if (e.description && e.description.trim()) {
+  if (e.payer_name?.trim()) return e.payer_name.trim();
+  if (e.description?.trim()) {
     const desc = e.description.trim();
     const m1 = desc.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+){0,3})\s*(?:—|-|:)\s*/);
     if (m1?.[1]) return m1[1].trim();
@@ -122,12 +109,22 @@ export function useIncomeData(): UseIncomeDataResult {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    devLog('Income', 'Loading ledgers from API…');
     try {
-      await mockDelay();
-      setDirectLedger(mockDirectLedger);
-      setTeamLedger(mockTeamLedger);
+      const [direct, team] = await Promise.all([
+        fetchAllLedgerEntries('DIRECT'),
+        fetchAllLedgerEntries('TEAM'),
+      ]);
+      setDirectLedger(direct);
+      setTeamLedger(team);
+      devLog('Income', 'Loaded (API)', {
+        direct_rows: direct.length,
+        team_rows: team.length,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load income');
+      const msg = e instanceof Error ? e.message : 'Failed to load income';
+      devError('Income', msg, e);
+      setError(msg);
       setDirectLedger([]);
       setTeamLedger([]);
     } finally {
