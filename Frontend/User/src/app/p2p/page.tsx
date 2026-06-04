@@ -242,6 +242,9 @@ export default function P2PPage() {
       setAmountStr('');
       setTxnPassword('');
       setNote('');
+      setSponsorId('');
+      setLookupState({ loading: false, result: null, error: null });
+      await refresh();
     } catch (err) {
       setAlert({
         kind: 'error',

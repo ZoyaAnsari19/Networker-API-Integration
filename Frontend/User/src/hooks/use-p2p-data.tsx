@@ -1,51 +1,23 @@
 'use client';
 
 import * as React from 'react';
+import { ApiError } from '@/lib/api-client';
+import { devError, devLog } from '@/lib/dev-log';
 import {
-  mockDelay,
-  mockP2PQuote,
-  mockP2PTransfers,
-  mockWalletSummary,
-} from '@/lib/mock-api-data';
+  fetchP2PQuote,
+  fetchP2PTransfersPage,
+  lookupP2PReceiver,
+  submitP2PTransfer,
+  type P2PLookup,
+  type P2PQuote,
+  type P2PTransfer,
+} from '@/lib/p2p-api';
+import { fetchWalletBalances, type WalletSummary } from '@/lib/wallet-api';
 
-export interface WalletSummary {
-  direct_balance: number;
-  team_balance: number;
-  total_balance: number;
-}
+export type { WalletSummary } from '@/lib/wallet-api';
+export type { P2PQuote, P2PLookup, P2PTransfer } from '@/lib/p2p-api';
 
-export interface P2PQuote {
-  enabled: boolean;
-  min_amount_paise: number;
-  service_charge_percent: number;
-  amount?: number;
-  service_charge?: number;
-  net_amount?: number;
-}
-
-export interface P2PLookup {
-  sponsor_id: string;
-  full_name: string;
-  status: string;
-  eligible: boolean;
-  reason?: string;
-}
-
-export interface P2PTransfer {
-  transfer_id: string;
-  sender_user_id: string;
-  receiver_user_id: string;
-  sender_sponsor_id: string;
-  receiver_sponsor_id: string;
-  wallet_type: string;
-  amount: number;
-  service_charge: number;
-  net_amount: number;
-  note?: string | null;
-  direction?: 'IN' | 'OUT';
-  counterparty_name?: string;
-  created_at: string;
-}
+const TRANSFER_LIST_LIMIT = 20;
 
 export interface P2PData {
   wallets: WalletSummary | null;
@@ -65,36 +37,43 @@ export interface P2PData {
   }) => Promise<P2PTransfer>;
 }
 
-function quoteWithAmount(base: P2PQuote, amountPaise: number): P2PQuote {
-  const amount = Math.max(0, Math.floor(amountPaise));
-  const serviceCharge = Math.floor(
-    (amount * base.service_charge_percent) / 100,
-  );
-  return {
-    ...base,
-    amount,
-    service_charge: serviceCharge,
-    net_amount: amount - serviceCharge,
-  };
-}
-
 export function useP2PData(): P2PData {
   const [wallets, setWallets] = React.useState<WalletSummary | null>(null);
   const [quote, setQuote] = React.useState<P2PQuote | null>(null);
   const [transfers, setTransfers] = React.useState<P2PTransfer[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await mockDelay();
-      setWallets(mockWalletSummary);
-      setQuote(mockP2PQuote);
-      setTransfers(mockP2PTransfers);
+      devLog('P2P', 'Loading from API…');
+      const [balances, quoteData, transferRows] = await Promise.all([
+        fetchWalletBalances(),
+        fetchP2PQuote(0),
+        fetchP2PTransfersPage(1, TRANSFER_LIST_LIMIT),
+      ]);
+      setWallets(balances);
+      setQuote(quoteData);
+      setTransfers(transferRows);
+      devLog('P2P', 'Loaded (API)', {
+        direct_paise: balances.direct_balance,
+        transfers: transferRows.length,
+        enabled: quoteData.enabled,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load P2P data');
+      const message =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Failed to load P2P data';
+      devError('P2P', message, e);
+      setError(message);
+      setWallets(null);
+      setQuote(null);
+      setTransfers([]);
     } finally {
       setLoading(false);
     }
@@ -106,32 +85,35 @@ export function useP2PData(): P2PData {
 
   const refreshQuote = React.useCallback(
     async (amountPaise: number): Promise<P2PQuote | null> => {
-      const q = quoteWithAmount(mockP2PQuote, amountPaise);
-      setQuote(q);
-      return q;
+      try {
+        const q = await fetchP2PQuote(amountPaise);
+        setQuote(q);
+        return q;
+      } catch (e) {
+        devError(
+          'P2P',
+          e instanceof Error ? e.message : 'Quote failed',
+          e,
+        );
+        return null;
+      }
     },
     [],
   );
 
   const lookupReceiver = React.useCallback(
     async (sponsorId: string): Promise<P2PLookup> => {
-      await mockDelay(200);
-      const id = sponsorId.trim().toUpperCase();
+      const id = sponsorId.trim();
       if (!id) {
         return {
-          sponsor_id: id,
+          sponsor_id: '',
           full_name: '',
           status: 'INACTIVE',
           eligible: false,
           reason: 'Enter a valid sponsor ID',
         };
       }
-      return {
-        sponsor_id: id,
-        full_name: 'Demo Member',
-        status: 'ACTIVE',
-        eligible: true,
-      };
+      return lookupP2PReceiver(id);
     },
     [],
   );
@@ -142,25 +124,14 @@ export function useP2PData(): P2PData {
       amountPaise: number;
       transactionPassword: string;
       note?: string;
-    }): Promise<P2PTransfer> => {
-      await mockDelay(500);
-      const q = quoteWithAmount(mockP2PQuote, input.amountPaise);
-      const result: P2PTransfer = {
-        transfer_id: `p2p_mock_${Date.now()}`,
-        sender_user_id: 'usr_001',
-        receiver_user_id: 'usr_demo',
-        sender_sponsor_id: 'ALEX2024',
-        receiver_sponsor_id: input.receiverSponsorId,
-        wallet_type: 'TEAM',
-        amount: q.amount ?? input.amountPaise,
-        service_charge: q.service_charge ?? 0,
-        net_amount: q.net_amount ?? input.amountPaise,
-        note: input.note ?? '',
-        direction: 'OUT',
-        counterparty_name: 'Demo Member',
-        created_at: new Date().toISOString(),
-      };
-      setTransfers((prev) => [result, ...prev].slice(0, 10));
+    }) => {
+      const result = await submitP2PTransfer(input);
+      const [balances, transferRows] = await Promise.all([
+        fetchWalletBalances(),
+        fetchP2PTransfersPage(1, TRANSFER_LIST_LIMIT),
+      ]);
+      setWallets(balances);
+      setTransfers(transferRows);
       return result;
     },
     [],

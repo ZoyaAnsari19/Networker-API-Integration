@@ -244,45 +244,6 @@ export const mockPackages = [
   },
 ];
 
-export const mockP2PQuote = {
-  enabled: true,
-  min_amount_paise: 10_000,
-  service_charge_percent: 2,
-};
-
-export const mockP2PTransfers = [
-  {
-    transfer_id: 'p2p_t1',
-    sender_user_id: currentUser.id,
-    receiver_user_id: 'usr_002',
-    sender_sponsor_id: currentUser.referralCode,
-    receiver_sponsor_id: 'RIGHT456ABC',
-    wallet_type: 'TEAM',
-    amount: 50_000,
-    service_charge: 1_000,
-    net_amount: 49_000,
-    note: 'Team support',
-    direction: 'OUT' as const,
-    counterparty_name: 'James Wilson',
-    created_at: daysAgo(2),
-  },
-  {
-    transfer_id: 'p2p_t2',
-    sender_user_id: 'usr_003',
-    receiver_user_id: currentUser.id,
-    sender_sponsor_id: 'LEFT789XYZ',
-    receiver_sponsor_id: currentUser.referralCode,
-    wallet_type: 'DIRECT',
-    amount: 25_000,
-    service_charge: 500,
-    net_amount: 24_500,
-    note: null,
-    direction: 'IN' as const,
-    counterparty_name: 'Sarah Miller',
-    created_at: daysAgo(5),
-  },
-];
-
 export const mockDirectReferrals = [
   ...leftTeamMembers.filter((m) => m.isDirect),
   ...rightTeamMembers.filter((m) => m.isDirect),
