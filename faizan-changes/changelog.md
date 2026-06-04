@@ -815,3 +815,17 @@ Task log for this repo. After every completed task, append a new block **at the 
 **Branch:** zoya-dev
 
 ---
+
+## [04-06-2026 15:10] — P2P page live API (no mock)
+
+**What changed:** User `/p2p` loads balances from `GET /api/v1/wallets`, platform rules and fee quote from `GET /api/v1/p2p/quote`, receiver lookup from `GET /api/v1/p2p/lookup`, history from `GET /api/v1/p2p/transfers`, and submits via `POST /api/v1/p2p/transfer` through `p2p-api.ts` + `use-p2p-data` (removed `mockP2PQuote` / `mockP2PTransfers` from `mock-api-data.ts`). Amounts shown in rupees; API uses paise. Backend untouched.
+
+**Files touched:** `Frontend/User/src/lib/p2p-api.ts`, `Frontend/User/src/hooks/use-p2p-data.tsx`, `Frontend/User/src/app/p2p/page.tsx`, `Frontend/User/src/lib/mock-api-data.ts`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /api/v1/wallets`, `GET /api/v1/p2p/quote`, `GET /api/v1/p2p/lookup`, `GET /api/v1/p2p/transfers`, `POST /api/v1/p2p/transfer`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
