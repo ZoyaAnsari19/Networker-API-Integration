@@ -843,3 +843,31 @@ Task log for this repo. After every completed task, append a new block **at the 
 **Branch:** zoya-dev
 
 ---
+
+## [04-06-2026 18:30] — Add Member dev OTP (frontend only)
+
+**What changed:** In `next dev` (`NODE_ENV=development`), add-member email/phone OTP is simulated in `add-member-api.ts` (local Map + `dev_otp` hint + console log). Production builds still call backend add-member OTP routes. Member create remains `POST /api/v1/users/create`. Backend unchanged.
+
+**Files touched:** `Frontend/User/src/lib/add-member-api.ts`, `Frontend/User/src/app/add-user/page.tsx`, `faizan-changes/changelog.md`
+
+**API endpoints used:** Dev: none for OTP; prod OTP: `POST /api/v1/add-member/email|phone/send|verify`; create: `POST /api/v1/users/create`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
+
+## [04-06-2026 17:05] — Dev servers restarted
+
+**What changed:** Restarted backend (`go run ./cmd/server` on :3100) and frontend (`npm run dev` on :4001) in terminal; health OK.
+
+**Files touched:** `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /health`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---

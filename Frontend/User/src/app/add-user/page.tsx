@@ -164,12 +164,18 @@ function OtpPanel({
                 <p className="text-sm font-semibold text-text-primary">
                   Enter the 6-digit code
                 </p>
-                <p className="mt-0.5 text-xs text-text-muted">
-                  {msg || `Code sent for ${channel} verification.`}
-                </p>
-                {devHint && (
-                  <p className="mt-1 text-[11px] font-mono text-accent-gold">
-                    dev code: {devHint}
+                {devHint ? (
+                  <>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Dev mode: OTP logged to browser console.
+                    </p>
+                    <p className="mt-1 font-mono text-sm font-semibold tracking-wide text-amber-400">
+                      dev code: {devHint}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {msg || `Code sent for ${channel} verification.`}
                   </p>
                 )}
               </div>
@@ -427,7 +433,7 @@ export default function AddUserPage() {
       setEmailOtpSent(true);
       if (res.dev_otp) {
         setEmailDevHint(res.dev_otp);
-        setEmailOtpMsg('Verification code sent (dev hint shown below).');
+        setEmailOtpMsg('Dev mode: use the code shown below.');
       } else {
         setEmailOtpMsg('Verification code sent to your email.');
       }
@@ -478,7 +484,7 @@ export default function AddUserPage() {
       setPhoneOtpSent(true);
       if (res.dev_otp) {
         setPhoneDevHint(res.dev_otp);
-        setPhoneOtpMsg('Verification code sent (dev hint shown below).');
+        setPhoneOtpMsg('Dev mode: use the code shown below.');
       } else {
         setPhoneOtpMsg('Verification code sent via WhatsApp.');
       }

@@ -1,4 +1,23 @@
 import { ApiError, apiJson, unwrapData, type ApiEnvelope } from '@/lib/api-client';
+import { mockDelay } from '@/lib/mock-api-data';
+
+/** Client-side OTP in `next dev` only; production uses backend add-member routes. */
+export const isAddMemberDevOtp = process.env.NODE_ENV === 'development';
+
+const devEmailOtps = new Map<string, string>();
+const devPhoneOtps = new Map<string, string>();
+
+function generateDevOtp(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function normalizePhoneKey(countryCode: string, local: string): string {
+  return toE164Phone(countryCode, local);
+}
 
 export interface AddMemberOTPSendResult {
   sent: boolean;
@@ -66,6 +85,16 @@ export function formatMemberPhone(
 export async function sendAddMemberEmailOtp(
   email: string,
 ): Promise<AddMemberOTPSendResult> {
+  if (isAddMemberDevOtp) {
+    await mockDelay(300);
+    const key = normalizeEmail(email);
+    const code = generateDevOtp();
+    devEmailOtps.set(key, code);
+    if (typeof console !== 'undefined') {
+      console.info('[add-member dev] email OTP', key, code);
+    }
+    return { sent: true, dev_otp: code };
+  }
   return withAddMemberErrors(async () => {
     const envelope = await apiJson<ApiEnvelope<AddMemberOTPSendResult>>(
       '/api/v1/add-member/email/send',
@@ -79,6 +108,16 @@ export async function verifyAddMemberEmailOtp(
   email: string,
   code: string,
 ): Promise<AddMemberOTPVerifyResult> {
+  if (isAddMemberDevOtp) {
+    await mockDelay(200);
+    const key = normalizeEmail(email);
+    const expected = devEmailOtps.get(key);
+    if (!expected || expected !== code.trim()) {
+      throw new ApiError(400, 'Invalid code. Please try again.');
+    }
+    devEmailOtps.delete(key);
+    return { verification_token: 'dev-email', expires_in_sec: 600 };
+  }
   return withAddMemberErrors(async () => {
     const envelope = await apiJson<ApiEnvelope<AddMemberOTPVerifyResult>>(
       '/api/v1/add-member/email/verify',
@@ -92,6 +131,16 @@ export async function sendAddMemberPhoneOtp(
   countryCode: string,
   local: string,
 ): Promise<AddMemberOTPSendResult> {
+  if (isAddMemberDevOtp) {
+    await mockDelay(300);
+    const key = normalizePhoneKey(countryCode, local);
+    const code = generateDevOtp();
+    devPhoneOtps.set(key, code);
+    if (typeof console !== 'undefined') {
+      console.info('[add-member dev] phone OTP', key, code);
+    }
+    return { sent: true, dev_otp: code };
+  }
   return withAddMemberErrors(async () => {
     const phone = toE164Phone(countryCode, local);
     const envelope = await apiJson<ApiEnvelope<AddMemberOTPSendResult>>(
@@ -107,6 +156,16 @@ export async function verifyAddMemberPhoneOtp(
   local: string,
   code: string,
 ): Promise<AddMemberOTPVerifyResult> {
+  if (isAddMemberDevOtp) {
+    await mockDelay(200);
+    const key = normalizePhoneKey(countryCode, local);
+    const expected = devPhoneOtps.get(key);
+    if (!expected || expected !== code.trim()) {
+      throw new ApiError(400, 'Invalid code. Please try again.');
+    }
+    devPhoneOtps.delete(key);
+    return { verification_token: 'dev-phone', expires_in_sec: 600 };
+  }
   return withAddMemberErrors(async () => {
     const phone = toE164Phone(countryCode, local);
     const envelope = await apiJson<ApiEnvelope<AddMemberOTPVerifyResult>>(
