@@ -8,7 +8,6 @@ import {
   rightTeamMembers,
   referralStats,
   earningsData,
-  type TeamMember as DummyTeamMember,
 } from '@/lib/dummy-data';
 
 export function mockDelay(ms = 350): Promise<void> {
@@ -225,39 +224,6 @@ export const mockTreeView = {
     right_bv: 450_000,
     status: 'ACTIVE',
   },
-};
-
-function mapTeamMember(m: DummyTeamMember, leg: 'LEFT' | 'RIGHT') {
-  return {
-    user_id: m.id,
-    sponsor_id: `${m.id}_SP`,
-    full_name: m.name,
-    email: m.email,
-    status: (m.status === 'active' ? 'ACTIVE' : 'INACTIVE') as
-      | 'ACTIVE'
-      | 'INACTIVE'
-      | 'BLOCKED',
-    package_name: m.package,
-    leg,
-    is_direct: m.isDirect,
-    volume: m.volume * 100,
-    depth: m.isDirect ? 1 : 2,
-    joined_at: m.joinedAt,
-  };
-}
-
-export const mockTeamLeft = leftTeamMembers.map((m) => mapTeamMember(m, 'LEFT'));
-export const mockTeamRight = rightTeamMembers.map((m) => mapTeamMember(m, 'RIGHT'));
-
-export const mockTeamStats = {
-  total_members: binaryStatus.leftCount + binaryStatus.rightCount,
-  active_members: binaryStatus.leftActive + binaryStatus.rightActive,
-  new_this_week: 12,
-  left_count: binaryStatus.leftCount,
-  right_count: binaryStatus.rightCount,
-  left_volume: binaryStatus.leftVolume * 100,
-  right_volume: binaryStatus.rightVolume * 100,
-  total_volume: (binaryStatus.leftVolume + binaryStatus.rightVolume) * 100,
 };
 
 export const mockPackages = [

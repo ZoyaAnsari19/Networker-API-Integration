@@ -1,37 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import {
-  mockDelay,
-  mockTeamLeft,
-  mockTeamRight,
-  mockTeamStats,
-} from '@/lib/mock-api-data';
+import { ApiError } from '@/lib/api-client';
+import { devError, devLog } from '@/lib/dev-log';
+import { fetchTeamPageData } from '@/lib/team-api';
+import type { TeamMember, TeamStatsView } from '@/lib/team-types';
 
-export interface TeamMember {
-  user_id: string;
-  sponsor_id: string;
-  full_name: string;
-  email: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
-  package_name: string | null;
-  leg: 'LEFT' | 'RIGHT';
-  is_direct: boolean;
-  volume: number;
-  depth: number;
-  joined_at: string;
-}
-
-export interface TeamStatsView {
-  total_members: number;
-  active_members: number;
-  new_this_week: number;
-  left_count: number;
-  right_count: number;
-  left_volume: number;
-  right_volume: number;
-  total_volume: number;
-}
+export type { TeamMember, TeamStatsView } from '@/lib/team-types';
 
 export interface TeamData {
   stats: TeamStatsView;
@@ -57,19 +32,35 @@ export function useTeamData(): TeamData {
   const [stats, setStats] = React.useState<TeamStatsView>(emptyStats);
   const [left, setLeft] = React.useState<TeamMember[]>([]);
   const [right, setRight] = React.useState<TeamMember[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await mockDelay();
-      setStats(mockTeamStats);
-      setLeft(mockTeamLeft);
-      setRight(mockTeamRight);
+      devLog('Team', 'Loading from API…');
+      const data = await fetchTeamPageData();
+      setStats(data.stats);
+      setLeft(data.left);
+      setRight(data.right);
+      devLog('Team', 'Loaded (API)', {
+        total_members: data.stats.total_members,
+        left_rows: data.left.length,
+        right_rows: data.right.length,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load team data');
+      const message =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Failed to load team data';
+      devError('Team', message, e);
+      setError(message);
+      setStats(emptyStats);
+      setLeft([]);
+      setRight([]);
     } finally {
       setLoading(false);
     }

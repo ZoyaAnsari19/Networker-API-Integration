@@ -31,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn, formatCurrency } from '@/lib/utils';
 import { RelativeTime } from '@/components/ui/relative-time';
-import type { TeamMember } from '@/hooks/use-team-data';
+import type { TeamMember } from '@/lib/team-types';
 
 interface TeamListProps {
   side: 'left' | 'right';
