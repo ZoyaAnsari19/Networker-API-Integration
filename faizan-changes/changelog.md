@@ -829,3 +829,17 @@ Task log for this repo. After every completed task, append a new block **at the 
 **Branch:** zoya-dev
 
 ---
+
+## [04-06-2026 16:00] — Add Member page frontend API (no mock)
+
+**What changed:** Wired `/add-user` to `add-member-api.ts`: email/phone OTP via `POST /api/v1/add-member/email|phone/send|verify`, member create via `POST /api/v1/users/create`. Removed client-side OTP simulation, `mockDelay`, and fake `DEMO` sponsor IDs. Shows `dev_otp` from API in non-production when returned. Backend code unchanged in this task.
+
+**Files touched:** `Frontend/User/src/lib/add-member-api.ts`, `Frontend/User/src/app/add-user/page.tsx`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `POST /api/v1/add-member/email/send`, `POST /api/v1/add-member/email/verify`, `POST /api/v1/add-member/phone/send`, `POST /api/v1/add-member/phone/verify`, `POST /api/v1/users/create`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
