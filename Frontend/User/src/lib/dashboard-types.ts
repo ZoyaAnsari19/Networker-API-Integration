@@ -49,6 +49,7 @@ export interface TreeView {
   left_bv: number;
   right_bv: number;
   status: string;
+  package_name?: string | null;
   left?: TreeView;
   right?: TreeView;
 }

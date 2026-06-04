@@ -24,20 +24,15 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, formatNumber, formatCurrency } from '@/lib/utils';
+import type { NetworkTreeNodeData } from '@/lib/network-tree-types';
 
-interface TreeNodeData {
-  id: string;
-  name: string;
-  avatar?: string;
-  memberCount: number;
-  volume: number;
-  rank: string;
-  rankLevel: number;
-  isActive: boolean;
-  joinedAt: string;
-  children?: TreeNodeData[];
-  directMembers?: number;
-  totalDownline?: number;
+export type TreeNodeData = NetworkTreeNodeData;
+
+export interface NetworkTreeVisualizerLegStats {
+  leftCount: number;
+  rightCount: number;
+  matchingVolumeRupees: number;
+  teamTotalMembers: number;
 }
 
 interface NetworkTreeVisualizerProps {
@@ -45,6 +40,7 @@ interface NetworkTreeVisualizerProps {
   onNodeClick?: (node: TreeNodeData) => void;
   /** Full-page layout: larger canvas with two-axis scroll for deep trees */
   layout?: 'default' | 'full';
+  legStats?: NetworkTreeVisualizerLegStats;
 }
 
 interface TreeNodeCardProps {
@@ -55,6 +51,7 @@ interface TreeNodeCardProps {
   onToggle: (id: string) => void;
   onNodeClick?: (node: TreeNodeData) => void;
   side: 'left' | 'right' | 'root';
+  teamTotalMembers: number;
 }
 
 const rankColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -64,6 +61,7 @@ const rankColors: Record<string, { bg: string; text: string; border: string }> =
   Gold: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
   Platinum: { bg: 'bg-platinum/20', text: 'text-platinum', border: 'border-platinum/30' },
   Diamond: { bg: 'bg-cyan-400/20', text: 'text-cyan-300', border: 'border-cyan-400/30' },
+  Unassigned: { bg: 'bg-slate-600/20', text: 'text-slate-400', border: 'border-slate-600/30' },
 };
 
 function TreeNodeCard({
@@ -74,6 +72,7 @@ function TreeNodeCard({
   onToggle,
   onNodeClick,
   side,
+  teamTotalMembers,
 }: TreeNodeCardProps) {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -196,20 +195,26 @@ function TreeNodeCard({
         )}
 
         {/* Progress Bar */}
-        <div className="mb-2">
-          <div className="flex justify-between text-[10px] text-text-muted mb-1">
-            <span>% of Team</span>
-            <span>{((node.memberCount / 1600) * 100).toFixed(1)}%</span>
+        {teamTotalMembers > 0 && (
+          <div className="mb-2">
+            <div className="flex justify-between text-[10px] text-text-muted mb-1">
+              <span>% of Team</span>
+              <span>
+                {((node.memberCount / teamTotalMembers) * 100).toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-card-hover rounded-full overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${Math.min((node.memberCount / teamTotalMembers) * 100, 100)}%`,
+                }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className={cn('h-full rounded-full', style.progress)}
+              />
+            </div>
           </div>
-          <div className="h-1.5 bg-card-hover rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min((node.memberCount / 1600) * 100, 100)}%` }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className={cn('h-full rounded-full', style.progress)}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Expand/Collapse Button */}
         {canExpand && (
@@ -283,6 +288,7 @@ function TreeNodeCard({
                     onToggle={onToggle}
                     onNodeClick={onNodeClick}
                     side={index === 0 ? 'left' : 'right'}
+                    teamTotalMembers={teamTotalMembers}
                   />
                 </div>
               ))}
@@ -294,8 +300,20 @@ function TreeNodeCard({
   );
 }
 
-export function NetworkTreeVisualizer({ rootNode, onNodeClick, layout = 'default' }: NetworkTreeVisualizerProps) {
-  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set(['root']));
+export function NetworkTreeVisualizer({
+  rootNode,
+  onNodeClick,
+  layout = 'default',
+  legStats,
+}: NetworkTreeVisualizerProps) {
+  const teamTotalMembers = Math.max(legStats?.teamTotalMembers ?? 1, 1);
+  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(
+    () => new Set([rootNode.id]),
+  );
+
+  React.useEffect(() => {
+    setExpandedNodes(new Set([rootNode.id]));
+  }, [rootNode.id]);
   const [maxDepth, setMaxDepth] = React.useState(layout === 'full' ? 6 : 3);
   const [zoom, setZoom] = React.useState(layout === 'full' ? 0.85 : 1);
   const [selectedFilter, setSelectedFilter] = React.useState('all');
@@ -323,7 +341,7 @@ export function NetworkTreeVisualizer({ rootNode, onNodeClick, layout = 'default
   };
 
   const collapseAll = () => {
-    setExpandedNodes(new Set(['root']));
+    setExpandedNodes(new Set([rootNode.id]));
   };
 
   // Count total nodes
@@ -403,21 +421,27 @@ export function NetworkTreeVisualizer({ rootNode, onNodeClick, layout = 'default
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">Left Leg</span>
           </div>
-          <p className="text-xl font-bold text-blue-400 mt-1">{formatNumber(847)}</p>
+          <p className="text-xl font-bold text-blue-400 mt-1">
+            {formatNumber(legStats?.leftCount ?? 0)}
+          </p>
         </div>
         <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20">
           <div className="flex items-center gap-2 text-orange-400">
             <span className="text-sm">Right Leg</span>
             <ArrowRight className="h-4 w-4" />
           </div>
-          <p className="text-xl font-bold text-orange-400 mt-1">{formatNumber(723)}</p>
+          <p className="text-xl font-bold text-orange-400 mt-1">
+            {formatNumber(legStats?.rightCount ?? 0)}
+          </p>
         </div>
         <div className="p-3 rounded-xl bg-accent-gold/10 border border-accent-gold/20">
           <div className="flex items-center gap-2 text-accent-gold">
             <Zap className="h-4 w-4" />
             <span className="text-sm">Matching</span>
           </div>
-          <p className="text-xl font-bold text-accent-gold mt-1">$189.2K</p>
+          <p className="text-xl font-bold text-accent-gold mt-1">
+            {formatCurrency(legStats?.matchingVolumeRupees ?? 0, 0)}
+          </p>
         </div>
       </div>
 
@@ -443,6 +467,7 @@ export function NetworkTreeVisualizer({ rootNode, onNodeClick, layout = 'default
               onToggle={toggleExpand}
               onNodeClick={onNodeClick}
               side="root"
+              teamTotalMembers={teamTotalMembers}
             />
           </motion.div>
 
@@ -469,61 +494,4 @@ export function NetworkTreeVisualizer({ rootNode, onNodeClick, layout = 'default
       </Card>
     </div>
   );
-}
-
-/** Deterministic 0–1 pseudo-random from an integer seed (SSR + client must match). */
-function seeded01(seed: number): number {
-  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-// Generate a complete binary tree for demo
-export function generateFullTree(): TreeNodeData {
-  const generateLevel = (level: number, maxLevel: number, startId: number): TreeNodeData[] => {
-    if (level > maxLevel) return [];
-
-    const names = [
-      'Sarah Miller', 'James Wilson', 'Emily Chen', 'Michael Brown',
-      'Lisa Anderson', 'David Kim', 'Amanda Taylor', 'Robert Martinez',
-      'Jennifer Lee', 'Chris Davis', 'Emma Watson', 'Ryan Gosling',
-      'Natalie Portman', 'Brad Pitt', 'Scarlett Jo', 'Tom Cruise'
-    ];
-
-    const ranks = ['Starter', 'Bronze', 'Silver', 'Gold'];
-
-    return [0, 1].map((side) => {
-      const s = startId * 7919 + side * 31 + level * 9973;
-      return {
-        id: `node_${startId}_${side}`,
-        name: names[startId % names.length],
-        avatar: `https://images.unsplash.com/photo-${1500000000000 + startId * 1000}?w=100&h=100&fit=crop&crop=face`,
-        memberCount: 20 + Math.floor(seeded01(s) * 200),
-        volume: 50000 + Math.floor(seeded01(s + 1) * 500000),
-        rank: ranks[Math.floor(seeded01(s + 2) * ranks.length)],
-        rankLevel: 1 + Math.floor(seeded01(s + 3) * 4),
-        isActive: seeded01(s + 4) > 0.3,
-        joinedAt: new Date(
-          1_704_067_200_000 - Math.floor(seeded01(s + 5) * 90 * 24 * 60 * 60 * 1000)
-        ).toISOString(),
-        directMembers: 1 + Math.floor(seeded01(s + 6) * 10),
-        totalDownline: 10 + Math.floor(seeded01(s + 7) * 100),
-        children: level < maxLevel - 1 ? generateLevel(level + 1, maxLevel, startId * 2 + side + 1) : undefined,
-      };
-    });
-  };
-
-  return {
-    id: 'root',
-    name: 'Alex Johnson',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-    memberCount: 1600,
-    volume: 4349135,
-    rank: 'Silver',
-    rankLevel: 3,
-    isActive: true,
-    joinedAt: '2024-01-15T10:30:00Z',
-    directMembers: 2,
-    totalDownline: 1598,
-    children: generateLevel(1, 6, 1),
-  };
 }

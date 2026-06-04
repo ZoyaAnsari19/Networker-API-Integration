@@ -201,31 +201,6 @@ export const mockTeamLedger: MockLedgerEntry[] = [
   },
 ];
 
-export const mockTreeView = {
-  user_id: currentUser.id,
-  full_name: currentUser.name,
-  leg: null as string | null,
-  left_bv: binaryStatus.leftVolume * 100,
-  right_bv: binaryStatus.rightVolume * 100,
-  status: 'ACTIVE',
-  left: {
-    user_id: 'tm_001',
-    full_name: 'Sarah Miller',
-    leg: 'LEFT',
-    left_bv: 500_000,
-    right_bv: 300_000,
-    status: 'ACTIVE',
-  },
-  right: {
-    user_id: 'tm_006',
-    full_name: 'James Wilson',
-    leg: 'RIGHT',
-    left_bv: 400_000,
-    right_bv: 450_000,
-    status: 'ACTIVE',
-  },
-};
-
 export const mockPackages = [
   {
     package_id: 'pkg_starter',
@@ -305,50 +280,6 @@ export const mockP2PTransfers = [
     direction: 'IN' as const,
     counterparty_name: 'Sarah Miller',
     created_at: daysAgo(5),
-  },
-];
-
-export const mockWithdrawalSchedule = {
-  server_now_ist: new Date().toISOString(),
-  ist_start_hour: 10,
-  ist_end_hour: 18,
-  within_time_window: true,
-  min_withdrawal_paise: 500_00,
-  service_charge_percent: 2,
-  tds_percent: 5,
-  allowed_dates_direct: [1, 5, 10, 15, 20, 25],
-  allowed_dates_team: [1, 5, 10, 15, 20, 25],
-  today_allowed_for_direct: true,
-  today_allowed_for_team: true,
-  max_percent_of_monthly_income: 50,
-};
-
-export const mockPayouts = [
-  {
-    payout_id: 'pay_001',
-    user_id: currentUser.id,
-    wallet_type: 'DIRECT',
-    requested_amount: 150_000,
-    service_charge_paise: 3_000,
-    tds_paise: 7_500,
-    net_payout_paise: 139_500,
-    payment_method: 'SECURE_WALLET',
-    status: 'COMPLETED',
-    requested_at: daysAgo(7),
-    processed_at: daysAgo(5),
-  },
-  {
-    payout_id: 'pay_002',
-    user_id: currentUser.id,
-    wallet_type: 'TEAM',
-    requested_amount: 80_000,
-    service_charge_paise: 1_600,
-    tds_paise: 4_000,
-    net_payout_paise: 74_400,
-    payment_method: 'SECURE_WALLET',
-    status: 'PENDING',
-    requested_at: daysAgo(1),
-    processed_at: null,
   },
 ];
 
