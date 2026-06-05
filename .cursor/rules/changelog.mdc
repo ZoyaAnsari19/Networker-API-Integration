@@ -46,3 +46,11 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 16:15] — Admin KYC page API integration
+
+**What changed:** KYC list/detail load from admin KYC APIs with user enrichment; approve/reject calls PATCH; mock data removed.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/kyc-requests/page.tsx`, `Frontend/Admin/lib/admin-kyc.ts`  
+**API endpoints used:** `GET /api/v1/admin/kyc/requests`, `GET /api/v1/admin/kyc/requests/:kycId`, `PATCH /api/v1/admin/kyc/requests/:kycId`, `GET /api/v1/admin/users`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
