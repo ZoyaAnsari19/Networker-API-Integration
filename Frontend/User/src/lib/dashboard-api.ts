@@ -45,6 +45,10 @@ function normalizeTreeNode(
     left_bv: Number(raw.left_bv ?? 0),
     right_bv: Number(raw.right_bv ?? 0),
     status: String(raw.status ?? 'INACTIVE'),
+    package_name:
+      raw.package_name == null || raw.package_name === ''
+        ? null
+        : String(raw.package_name),
     left: normalizeTreeNode(raw.left as Record<string, unknown> | undefined),
     right: normalizeTreeNode(raw.right as Record<string, unknown> | undefined),
   };

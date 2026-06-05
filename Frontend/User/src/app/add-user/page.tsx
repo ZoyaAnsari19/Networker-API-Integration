@@ -27,7 +27,15 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { mockDelay } from '@/lib/mock-api-data';
+import { ApiError } from '@/lib/api-client';
+import {
+  createDashboardMember,
+  formatMemberPhone,
+  sendAddMemberEmailOtp,
+  sendAddMemberPhoneOtp,
+  verifyAddMemberEmailOtp,
+  verifyAddMemberPhoneOtp,
+} from '@/lib/add-member-api';
 
 const COUNTRY_CODES = [
   { code: '+91', flag: '🇮🇳', name: 'India' },
@@ -46,21 +54,6 @@ function isValidEmail(v: string) {
 }
 function isValidPhone(v: string) {
   return v.replace(/[\s\-+]/g, '').length >= 7;
-}
-
-/**
- * Dev-mode OTP simulation.
- *
- * FMCG-Binary backend currently does not expose OTP endpoints. To keep the
- * signup UX consistent with Secure Coin, we simulate OTP client-side:
- *   - "Send OTP" generates a 6-digit code and logs it to the browser console
- *     (also shown as a dev-only hint in the UI).
- *   - "Verify" checks the entered code against the generated one.
- * When the backend exposes /auth/signup-otp/send + /verify (or similar),
- * replace `simulateSendOtp` / `simulateVerifyOtp` with real fetches.
- */
-function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 function CountryCodeSelect({
@@ -171,12 +164,18 @@ function OtpPanel({
                 <p className="text-sm font-semibold text-text-primary">
                   Enter the 6-digit code
                 </p>
-                <p className="mt-0.5 text-xs text-text-muted">
-                  {msg || `Code sent for ${channel} verification.`}
-                </p>
-                {devHint && (
-                  <p className="mt-1 text-[11px] font-mono text-accent-gold">
-                    dev code: {devHint}
+                {devHint ? (
+                  <>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Dev mode: OTP logged to browser console.
+                    </p>
+                    <p className="mt-1 font-mono text-sm font-semibold tracking-wide text-amber-400">
+                      dev code: {devHint}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-0.5 text-xs text-text-muted">
+                    {msg || `Code sent for ${channel} verification.`}
                   </p>
                 )}
               </div>
@@ -386,7 +385,7 @@ export default function AddUserPage() {
   const [emailOtpVerifying, setEmailOtpVerifying] = React.useState(false);
   const [emailVerified, setEmailVerified] = React.useState(false);
   const [emailOtpMsg, setEmailOtpMsg] = React.useState('');
-  const emailOtpRef = React.useRef<string>('');
+  const [emailDevHint, setEmailDevHint] = React.useState('');
 
   const [phoneOtpSent, setPhoneOtpSent] = React.useState(false);
   const [phoneOtpSending, setPhoneOtpSending] = React.useState(false);
@@ -394,7 +393,7 @@ export default function AddUserPage() {
   const [phoneOtpVerifying, setPhoneOtpVerifying] = React.useState(false);
   const [phoneVerified, setPhoneVerified] = React.useState(false);
   const [phoneOtpMsg, setPhoneOtpMsg] = React.useState('');
-  const phoneOtpRef = React.useRef<string>('');
+  const [phoneDevHint, setPhoneDevHint] = React.useState('');
 
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [apiError, setApiError] = React.useState('');
@@ -411,14 +410,14 @@ export default function AddUserPage() {
     setEmailVerified(false);
     setEmailOtp('');
     setEmailOtpMsg('');
-    emailOtpRef.current = '';
+    setEmailDevHint('');
   };
   const resetPhoneOtp = () => {
     setPhoneOtpSent(false);
     setPhoneVerified(false);
     setPhoneOtp('');
     setPhoneOtpMsg('');
-    phoneOtpRef.current = '';
+    setPhoneDevHint('');
   };
 
   const handleSendEmailOtp = async () => {
@@ -428,29 +427,47 @@ export default function AddUserPage() {
     }
     setEmailOtpSending(true);
     setEmailOtpMsg('');
-    await new Promise((r) => setTimeout(r, 400));
-    const code = generateOtp();
-    emailOtpRef.current = code;
-    // eslint-disable-next-line no-console
-    console.info(
-      `%c[dev] email OTP for ${email} = ${code}`,
-      'color:#10b981;font-weight:bold'
-    );
-    setEmailOtpSending(false);
-    setEmailOtpSent(true);
-    setEmailOtpMsg('Dev mode: OTP logged to browser console.');
+    setEmailDevHint('');
+    try {
+      const res = await sendAddMemberEmailOtp(email);
+      setEmailOtpSent(true);
+      if (res.dev_otp) {
+        setEmailDevHint(res.dev_otp);
+        setEmailOtpMsg('Dev mode: use the code shown below.');
+      } else {
+        setEmailOtpMsg('Verification code sent to your email.');
+      }
+    } catch (e) {
+      setEmailOtpMsg(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not send email verification code.',
+      );
+    } finally {
+      setEmailOtpSending(false);
+    }
   };
 
   const handleVerifyEmailOtp = async () => {
+    if (emailOtp.length < 6) {
+      setEmailOtpMsg('Enter the 6-digit code.');
+      return;
+    }
     setEmailOtpVerifying(true);
-    await new Promise((r) => setTimeout(r, 250));
-    setEmailOtpVerifying(false);
-    if (emailOtp === emailOtpRef.current && emailOtp.length === 6) {
+    setEmailOtpMsg('');
+    try {
+      await verifyAddMemberEmailOtp(email, emailOtp);
       setEmailVerified(true);
       setEmailOtpMsg('');
       setErrors((er) => ({ ...er, email: '' }));
-    } else {
-      setEmailOtpMsg('Invalid code. Please try again.');
+    } catch (e) {
+      setEmailOtpMsg(
+        e instanceof ApiError
+          ? e.message
+          : 'Invalid code. Please try again.',
+      );
+    } finally {
+      setEmailOtpVerifying(false);
     }
   };
 
@@ -461,29 +478,47 @@ export default function AddUserPage() {
     }
     setPhoneOtpSending(true);
     setPhoneOtpMsg('');
-    await new Promise((r) => setTimeout(r, 400));
-    const code = generateOtp();
-    phoneOtpRef.current = code;
-    // eslint-disable-next-line no-console
-    console.info(
-      `%c[dev] phone OTP for ${countryCode}${phone} = ${code}`,
-      'color:#10b981;font-weight:bold'
-    );
-    setPhoneOtpSending(false);
-    setPhoneOtpSent(true);
-    setPhoneOtpMsg('Dev mode: OTP logged to browser console.');
+    setPhoneDevHint('');
+    try {
+      const res = await sendAddMemberPhoneOtp(countryCode, phone);
+      setPhoneOtpSent(true);
+      if (res.dev_otp) {
+        setPhoneDevHint(res.dev_otp);
+        setPhoneOtpMsg('Dev mode: use the code shown below.');
+      } else {
+        setPhoneOtpMsg('Verification code sent via WhatsApp.');
+      }
+    } catch (e) {
+      setPhoneOtpMsg(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not send phone verification code.',
+      );
+    } finally {
+      setPhoneOtpSending(false);
+    }
   };
 
   const handleVerifyPhoneOtp = async () => {
+    if (phoneOtp.length < 6) {
+      setPhoneOtpMsg('Enter the 6-digit code.');
+      return;
+    }
     setPhoneOtpVerifying(true);
-    await new Promise((r) => setTimeout(r, 250));
-    setPhoneOtpVerifying(false);
-    if (phoneOtp === phoneOtpRef.current && phoneOtp.length === 6) {
+    setPhoneOtpMsg('');
+    try {
+      await verifyAddMemberPhoneOtp(countryCode, phone, phoneOtp);
       setPhoneVerified(true);
       setPhoneOtpMsg('');
       setErrors((er) => ({ ...er, phone: '' }));
-    } else {
-      setPhoneOtpMsg('Invalid code. Please try again.');
+    } catch (e) {
+      setPhoneOtpMsg(
+        e instanceof ApiError
+          ? e.message
+          : 'Invalid code. Please try again.',
+      );
+    } finally {
+      setPhoneOtpVerifying(false);
     }
   };
 
@@ -507,17 +542,26 @@ export default function AddUserPage() {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      await mockDelay(600);
-      setSubmitting(false);
-      const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
-      setSuccess({
-        sponsor_id: `DEMO${suffix}`,
+      const created = await createDashboardMember({
         full_name: fullName.trim(),
         email: email.trim(),
+        phone: formatMemberPhone(countryCode, phone),
+        password,
+        leg,
       });
-    } catch {
+      setSuccess({
+        sponsor_id: created.sponsor_id,
+        full_name: created.full_name,
+        email: created.email,
+      });
+    } catch (e) {
+      setApiError(
+        e instanceof ApiError
+          ? e.message
+          : 'Could not create user — please try again.',
+      );
+    } finally {
       setSubmitting(false);
-      setApiError('Could not create user — please try again.');
     }
   };
 
@@ -749,8 +793,8 @@ export default function AddUserPage() {
           msg={emailOtpMsg}
           verified={emailVerified}
           devHint={
-            process.env.NODE_ENV !== 'production'
-              ? emailOtpRef.current
+            process.env.NODE_ENV !== 'production' && emailDevHint
+              ? emailDevHint
               : undefined
           }
         />
@@ -789,8 +833,8 @@ export default function AddUserPage() {
           msg={phoneOtpMsg}
           verified={phoneVerified}
           devHint={
-            process.env.NODE_ENV !== 'production'
-              ? phoneOtpRef.current
+            process.env.NODE_ENV !== 'production' && phoneDevHint
+              ? phoneDevHint
               : undefined
           }
         />
@@ -886,8 +930,9 @@ export default function AddUserPage() {
                     : !emailVerified
                     ? 'email'
                     : 'phone'}{' '}
-                  with OTP before creating the account. OTP codes appear in the
-                  browser console in dev mode.
+                  with OTP before creating the account. In local dev, the API may
+                  return a code hint below the field when SMTP/WhatsApp are not
+                  configured.
                 </span>
               </div>
             </motion.div>

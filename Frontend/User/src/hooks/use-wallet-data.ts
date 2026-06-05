@@ -1,33 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import {
-  mockDelay,
-  mockDirectLedger,
-  mockMeProfile,
-  mockTeamLedger,
-  mockWalletSummary,
-  type MockLedgerEntry,
-} from '@/lib/mock-api-data';
+import { ApiError } from '@/lib/api-client';
+import type { LedgerEntry } from '@/lib/dashboard-types';
+import { devError, devLog } from '@/lib/dev-log';
+import { fetchWalletPageData, type WalletSummary } from '@/lib/wallet-api';
 
-export interface WalletSummary {
-  direct_balance: number;
-  team_balance: number;
-  total_balance: number;
-}
-
-export interface LedgerEntry {
-  id: number;
-  user_id: string;
-  wallet_type: string;
-  amount: number;
-  entry_type: string;
-  source: string;
-  reference_id: string | null;
-  reference_type: string | null;
-  description: string | null;
-  created_at: string;
-}
+export type { WalletSummary } from '@/lib/wallet-api';
 
 export type WalletTxDisplayType =
   | 'deposit'
@@ -75,7 +54,7 @@ function sourceToDisplayType(
 }
 
 function rowDescription(e: LedgerEntry): string {
-  if (e.description && e.description.trim()) {
+  if (e.description?.trim()) {
     return e.description.trim();
   }
   const wt = e.wallet_type === 'TEAM' ? 'Team wallet' : 'Direct wallet';
@@ -83,10 +62,14 @@ function rowDescription(e: LedgerEntry): string {
   return `${wt} · ${src}`;
 }
 
-function ledgerToRows(entries: MockLedgerEntry[]): WalletTransactionRow[] {
+function ledgerToRows(entries: LedgerEntry[]): WalletTransactionRow[] {
   return entries.map((e) => {
     const signedPaise =
-      e.entry_type === 'CREDIT' ? e.amount : e.entry_type === 'DEBIT' ? -e.amount : 0;
+      e.entry_type === 'CREDIT'
+        ? e.amount
+        : e.entry_type === 'DEBIT'
+          ? -e.amount
+          : 0;
     return {
       id: `${e.wallet_type}-${e.id}`,
       type: sourceToDisplayType(e.source, e.entry_type),
@@ -118,27 +101,38 @@ export function useWalletData(): WalletPageData {
   const [transactions, setTransactions] = React.useState<
     WalletTransactionRow[]
   >([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await mockDelay();
-      setBalances(mockWalletSummary);
-      setPlatformWalletLinked(Boolean(mockMeProfile.secure_wallet_external_id));
-      setSecureBalancePaise(mockMeProfile.secure_wallet_balance_paise ?? null);
-
-      const merged = [...mockDirectLedger, ...mockTeamLedger].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-      setTransactions(ledgerToRows(merged.slice(0, 100)));
+      devLog('Wallet', 'Loading from API…');
+      const data = await fetchWalletPageData();
+      setBalances(data.balances);
+      setPlatformWalletLinked(data.platformWalletLinked);
+      setSecureBalancePaise(data.secureBalancePaise);
+      setTransactions(ledgerToRows(data.ledgerEntries));
+      devLog('Wallet', 'Loaded (API)', {
+        direct_paise: data.balances.direct_balance,
+        team_paise: data.balances.team_balance,
+        tx_rows: data.ledgerEntries.length,
+        platform_linked: data.platformWalletLinked,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load wallet');
+      const message =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Failed to load wallet';
+      devError('Wallet', message, e);
+      setError(message);
       setBalances(null);
       setTransactions([]);
+      setPlatformWalletLinked(false);
+      setSecureBalancePaise(null);
     } finally {
       setLoading(false);
     }

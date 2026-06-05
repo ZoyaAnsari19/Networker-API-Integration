@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmcg-binary/internal/models"
 	"fmcg-binary/internal/repository"
@@ -80,6 +81,21 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
+// isBcryptHash reports whether stored looks like a bcrypt hash ($2a$, $2b$, $2y$).
+func isBcryptHash(stored string) bool {
+	return len(stored) >= 4 &&
+		(stored[:4] == "$2a$" || stored[:4] == "$2b$" || stored[:4] == "$2y$")
+}
+
+// compareTxnPassword accepts bcrypt hashes (current format) and legacy plain-text
+// values imported from prod dumps. New passwords are always saved as bcrypt.
+func compareTxnPassword(stored, supplied string) bool {
+	if isBcryptHash(stored) {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(supplied)) == nil
+	}
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(supplied)) == 1
+}
+
 // ChangePassword verifies the current login password then rotates it. The
 // current-password check is intentional: it blocks anyone with a stolen
 // session (but no password knowledge) from silently swapping the password.
@@ -130,7 +146,7 @@ func (s *AuthService) SetTransactionPassword(ctx context.Context, userID, loginP
 		if currentTxnPassword == "" {
 			return errors.New("current transaction password is required")
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(existingHash), []byte(currentTxnPassword)); err != nil {
+		if !compareTxnPassword(existingHash, currentTxnPassword) {
 			return errors.New("current transaction password is incorrect")
 		}
 	}
@@ -221,7 +237,7 @@ func (s *AuthService) VerifyTransactionPassword(ctx context.Context, userID, txn
 	if hash == "" {
 		return errors.New("transaction password is not set — please set one in your profile first")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(txnPassword)); err != nil {
+	if !compareTxnPassword(hash, txnPassword) {
 		return errors.New("incorrect transaction password")
 	}
 	return nil

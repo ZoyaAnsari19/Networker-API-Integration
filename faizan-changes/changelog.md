@@ -815,3 +815,59 @@ Task log for this repo. After every completed task, append a new block **at the 
 **Branch:** zoya-dev
 
 ---
+
+## [04-06-2026 15:10] — P2P page live API (no mock)
+
+**What changed:** User `/p2p` loads balances from `GET /api/v1/wallets`, platform rules and fee quote from `GET /api/v1/p2p/quote`, receiver lookup from `GET /api/v1/p2p/lookup`, history from `GET /api/v1/p2p/transfers`, and submits via `POST /api/v1/p2p/transfer` through `p2p-api.ts` + `use-p2p-data` (removed `mockP2PQuote` / `mockP2PTransfers` from `mock-api-data.ts`). Amounts shown in rupees; API uses paise. Backend untouched.
+
+**Files touched:** `Frontend/User/src/lib/p2p-api.ts`, `Frontend/User/src/hooks/use-p2p-data.tsx`, `Frontend/User/src/app/p2p/page.tsx`, `Frontend/User/src/lib/mock-api-data.ts`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /api/v1/wallets`, `GET /api/v1/p2p/quote`, `GET /api/v1/p2p/lookup`, `GET /api/v1/p2p/transfers`, `POST /api/v1/p2p/transfer`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
+
+## [04-06-2026 16:00] — Add Member page frontend API (no mock)
+
+**What changed:** Wired `/add-user` to `add-member-api.ts`: email/phone OTP via `POST /api/v1/add-member/email|phone/send|verify`, member create via `POST /api/v1/users/create`. Removed client-side OTP simulation, `mockDelay`, and fake `DEMO` sponsor IDs. Shows `dev_otp` from API in non-production when returned. Backend code unchanged in this task.
+
+**Files touched:** `Frontend/User/src/lib/add-member-api.ts`, `Frontend/User/src/app/add-user/page.tsx`, `faizan-changes/changelog.md`
+
+**API endpoints used:** `POST /api/v1/add-member/email/send`, `POST /api/v1/add-member/email/verify`, `POST /api/v1/add-member/phone/send`, `POST /api/v1/add-member/phone/verify`, `POST /api/v1/users/create`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
+
+## [04-06-2026 18:30] — Add Member dev OTP (frontend only)
+
+**What changed:** In `next dev` (`NODE_ENV=development`), add-member email/phone OTP is simulated in `add-member-api.ts` (local Map + `dev_otp` hint + console log). Production builds still call backend add-member OTP routes. Member create remains `POST /api/v1/users/create`. Backend unchanged.
+
+**Files touched:** `Frontend/User/src/lib/add-member-api.ts`, `Frontend/User/src/app/add-user/page.tsx`, `faizan-changes/changelog.md`
+
+**API endpoints used:** Dev: none for OTP; prod OTP: `POST /api/v1/add-member/email|phone/send|verify`; create: `POST /api/v1/users/create`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---
+
+## [04-06-2026 17:05] — Dev servers restarted
+
+**What changed:** Restarted backend (`go run ./cmd/server` on :3100) and frontend (`npm run dev` on :4001) in terminal; health OK.
+
+**Files touched:** `faizan-changes/changelog.md`
+
+**API endpoints used:** `GET /health`
+
+**Breaking change:** NO
+
+**Branch:** zoya-dev
+
+---

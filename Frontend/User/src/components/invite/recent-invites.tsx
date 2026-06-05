@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RelativeTime } from '@/components/ui/relative-time';
-import type { DirectReferral } from '@/hooks/use-invite-data';
+import type { DirectReferral } from '@/lib/invite-types';
 
 interface RecentInvitesProps {
   referrals: DirectReferral[];

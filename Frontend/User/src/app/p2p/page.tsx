@@ -197,7 +197,13 @@ export default function P2PPage() {
     }
     return Math.floor((amountPaise * (chargePercent * 100)) / 10000);
   }, [amountPaise, quote, chargePercent]);
-  const netPaise = Math.max(0, amountPaise - servicePaise);
+  const netPaise = React.useMemo(() => {
+    if (!amountPaise) return 0;
+    if (quote?.amount === amountPaise && typeof quote?.net_amount === 'number') {
+      return quote.net_amount;
+    }
+    return Math.max(0, amountPaise - servicePaise);
+  }, [amountPaise, quote, servicePaise]);
 
   const receiverOk =
     !!lookupState.result?.eligible && lookupState.result.sponsor_id;
@@ -242,6 +248,9 @@ export default function P2PPage() {
       setAmountStr('');
       setTxnPassword('');
       setNote('');
+      setSponsorId('');
+      setLookupState({ loading: false, result: null, error: null });
+      await refresh();
     } catch (err) {
       setAlert({
         kind: 'error',
