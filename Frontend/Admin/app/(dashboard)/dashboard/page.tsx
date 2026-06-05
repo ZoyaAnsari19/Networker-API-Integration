@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,20 +16,17 @@ import {
   Wallet,
   ShieldAlert,
   BookOpen,
+  Loader2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkline } from "@/components/charts/sparkline";
-import { cn, formatINR, formatDate } from "@/lib/utils";
+import { cn, formatINR } from "@/lib/utils";
 import {
-  USERS_INITIAL,
-  PACKAGES_INITIAL,
-  PAYOUTS_INITIAL,
-  KYC_REQUESTS_INITIAL,
-  DIRECT_INCOME_INITIAL,
-  BINARY_INCOME_INITIAL,
-  LEDGER_INITIAL,
-} from "@/lib/mock-data";
+  loadDashboardStats,
+  type DashboardStats,
+} from "@/lib/admin-dashboard";
+import { ApiError } from "@/lib/api-client";
 
 type KpiColorKey = "blue" | "emerald" | "amber" | "violet" | "sky" | "teal" | "rose";
 
@@ -52,57 +50,164 @@ function genTrend(seed: number, len = 7): number[] {
   return arr;
 }
 
+const EMPTY_STATS: DashboardStats = {
+  totalUsers: 0,
+  activeUsers: 0,
+  pendingKyc: 0,
+  pendingPayouts: 0,
+  activePackages: 0,
+  directToday: 0,
+  binaryToday: 0,
+  directTotal: 0,
+  binaryTotal: 0,
+  recentPayouts: [],
+};
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [todayLine, setTodayLine] = useState("");
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     setTodayLine(
-      new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+      new Date().toLocaleDateString("en-IN", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
     );
   }, []);
 
-  const stats = useMemo(() => {
-    const totalUsers = USERS_INITIAL.length;
-    const activeUsers = USERS_INITIAL.filter((u) => u.status === "ACTIVE").length;
-    const pendingPayouts = PAYOUTS_INITIAL.filter((p) => p.status === "PENDING").length;
-    const pendingKyc = KYC_REQUESTS_INITIAL.filter((k) => k.status === "PENDING" || k.status === "SUBMITTED").length;
-    const activePackages = PACKAGES_INITIAL.filter((p) => p.status === "ACTIVE").length;
-
-    const today = new Date();
-    const sameDay = (d: string) => new Date(d).toDateString() === today.toDateString();
-
-    const directToday  = DIRECT_INCOME_INITIAL.filter((r) => sameDay(r.created_at)).reduce((s, r) => s + r.commission, 0);
-    const binaryToday  = BINARY_INCOME_INITIAL.filter((r) => sameDay(r.created_at)).reduce((s, r) => s + r.total_credited, 0);
-    const directTotal  = DIRECT_INCOME_INITIAL.reduce((s, r) => s + r.commission, 0);
-    const binaryTotal  = BINARY_INCOME_INITIAL.reduce((s, r) => s + r.total_credited, 0);
-
-    const totalPayoutPaise = PAYOUTS_INITIAL
-      .filter((p) => p.status === "COMPLETED" || p.status === "APPROVED")
-      .reduce((s, p) => s + (p.approved_amount ?? p.requested_amount), 0);
-
-    return {
-      totalUsers, activeUsers, pendingPayouts,
-      pendingKyc, activePackages,
-      directToday, binaryToday, directTotal, binaryTotal, totalPayoutPaise,
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await loadDashboardStats();
+        if (!cancelled) setStats(data);
+      } catch (err) {
+        if (!cancelled) {
+          const msg =
+            err instanceof ApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : "Failed to load dashboard";
+          setError(msg);
+          setStats(EMPTY_STATS);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
-  const kpiCards: Array<{ label: string; value: string; trend: number[]; icon: LucideIcon; color: KpiColorKey; path: string; alert?: boolean }> = [
-    { label: "Total networkers",   value: stats.totalUsers.toLocaleString(),             trend: genTrend(stats.totalUsers),   icon: Users,    color: "blue",    path: "/users" },
-    { label: "Active networkers",  value: stats.activeUsers.toLocaleString(),            trend: genTrend(stats.activeUsers),  icon: Users,    color: "emerald", path: "/users" },
-    { label: "Pending KYC",        value: String(stats.pendingKyc),                       trend: genTrend(stats.pendingKyc + 2),  icon: FileCheck2, color: "amber",   path: "/kyc-requests", alert: stats.pendingKyc > 0 },
-    { label: "Pending withdrawals", value: String(stats.pendingPayouts),                  trend: genTrend(stats.pendingPayouts + 5),  icon: Landmark, color: "rose",    path: "/payouts", alert: stats.pendingPayouts > 0 },
-  ];
+  const s = stats ?? EMPTY_STATS;
 
-  const incomeCards: Array<{ label: string; value: string; sub: string; trend: number[]; icon: LucideIcon; color: KpiColorKey; path: string }> = [
-    { label: "Direct income today",  value: formatINR(stats.directToday),  sub: "Credited to sponsor direct wallets",  trend: genTrend(17), icon: TrendingUp, color: "violet",  path: "/income/direct" },
-    { label: "Binary income today",  value: formatINR(stats.binaryToday),  sub: "After daily cap enforcement",         trend: genTrend(23), icon: GitBranch,  color: "sky",     path: "/income/binary" },
-    { label: "Lifetime direct paid", value: formatINR(stats.directTotal),  sub: "All-time direct commissions",         trend: genTrend(31), icon: TrendingUp, color: "teal",    path: "/income/direct" },
-    { label: "Lifetime binary paid", value: formatINR(stats.binaryTotal),  sub: "All-time binary + level bonus",       trend: genTrend(37), icon: GitBranch,  color: "emerald", path: "/income/binary" },
-  ];
+  const kpiCards: Array<{
+    label: string;
+    value: string;
+    trend: number[];
+    icon: LucideIcon;
+    color: KpiColorKey;
+    path: string;
+    alert?: boolean;
+  }> = useMemo(
+    () => [
+      {
+        label: "Total networkers",
+        value: s.totalUsers.toLocaleString(),
+        trend: genTrend(s.totalUsers),
+        icon: Users,
+        color: "blue",
+        path: "/users",
+      },
+      {
+        label: "Active networkers",
+        value: s.activeUsers.toLocaleString(),
+        trend: genTrend(s.activeUsers),
+        icon: Users,
+        color: "emerald",
+        path: "/users",
+      },
+      {
+        label: "Pending KYC",
+        value: String(s.pendingKyc),
+        trend: genTrend(s.pendingKyc + 2),
+        icon: FileCheck2,
+        color: "amber",
+        path: "/kyc-requests",
+        alert: s.pendingKyc > 0,
+      },
+      {
+        label: "Pending withdrawals",
+        value: String(s.pendingPayouts),
+        trend: genTrend(s.pendingPayouts + 5),
+        icon: Landmark,
+        color: "rose",
+        path: "/payouts",
+        alert: s.pendingPayouts > 0,
+      },
+    ],
+    [s],
+  );
 
-  const recentLedger = useMemo(() => [...LEDGER_INITIAL].slice(0, 6), []);
-  const recentPayouts = useMemo(() => [...PAYOUTS_INITIAL].slice(0, 5), []);
+  const incomeCards: Array<{
+    label: string;
+    value: string;
+    sub: string;
+    trend: number[];
+    icon: LucideIcon;
+    color: KpiColorKey;
+    path: string;
+  }> = useMemo(
+    () => [
+      {
+        label: "Direct income today",
+        value: formatINR(s.directToday),
+        sub: "Per-day direct totals require income reporting API",
+        trend: genTrend(17),
+        icon: TrendingUp,
+        color: "violet",
+        path: "/income/direct",
+      },
+      {
+        label: "Binary income today",
+        value: formatINR(s.binaryToday),
+        sub: "Sum of networker today_binary_earned",
+        trend: genTrend(23),
+        icon: GitBranch,
+        color: "sky",
+        path: "/income/binary",
+      },
+      {
+        label: "Monthly income (networkers)",
+        value: formatINR(s.directTotal),
+        sub: "Sum of monthly_income_paise across networkers",
+        trend: genTrend(31),
+        icon: TrendingUp,
+        color: "teal",
+        path: "/income/direct",
+      },
+      {
+        label: "Binary earned today (total)",
+        value: formatINR(s.binaryTotal),
+        sub: "Platform-wide binary credits today",
+        trend: genTrend(37),
+        icon: GitBranch,
+        color: "emerald",
+        path: "/income/binary",
+      },
+    ],
+    [s],
+  );
 
   return (
     <div className="space-y-8 pb-8">
@@ -114,9 +219,11 @@ export default function AdminDashboardPage() {
               <LayoutDashboard className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Admin Dashboard</h1>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
+                Admin Dashboard
+              </h1>
               <p className="text-sm text-[var(--text-secondary)] mt-0.5 max-w-2xl">
-                Operational overview for the Binary MLM platform — networkers, KYC, withdrawals, direct & binary income, and configuration.
+                Operational overview for the Binary MLM platform — networkers, KYC, withdrawals, and packages.
               </p>
             </div>
           </div>
@@ -126,177 +233,257 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiCards.map((card, i) => {
-          const Icon = card.icon;
-          const c = colorMap[card.color];
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => router.push(card.path)}
-              className={cn(
-                "group relative overflow-hidden rounded-2xl border bg-white p-5 text-left shadow-sm transition-all duration-300",
-                "hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
-                "animate-card-entrance",
-                card.alert ? "border-amber-200 ring-1 ring-amber-100" : "border-slate-200/90"
-              )}
-              style={{ animationDelay: `${i * 80}ms` }}
-            >
-              <div className="relative">
-                <div className="flex items-start justify-between gap-3">
-                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110", c.bg, c.icon)}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  {card.alert && <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse ring-4 ring-amber-500/10" />}
-                </div>
-                <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">{card.value}</p>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">{card.label}</p>
-                <div className="mt-4 h-12 w-full rounded-xl overflow-hidden bg-gradient-to-b from-slate-50/60 to-slate-100/40">
-                  <Sparkline data={card.trend} width={280} height={48} strokeColor={c.stroke} fillColor={c.fill} className="w-full h-full" />
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {incomeCards.map((card, i) => {
-          const Icon = card.icon;
-          const c = colorMap[card.color];
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => router.push(card.path)}
-              className={cn(
-                "group relative overflow-hidden rounded-2xl border bg-white p-5 text-left shadow-sm transition-all duration-300",
-                "hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300",
-                "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
-                "animate-card-entrance border-slate-200/90"
-              )}
-              style={{ animationDelay: `${(kpiCards.length + i) * 80}ms` }}
-            >
-              <div className="relative">
-                <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110", c.bg, c.icon)}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">{card.value}</p>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">{card.label}</p>
-                <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
-                <div className="mt-4 h-12 w-full rounded-xl overflow-hidden bg-gradient-to-b from-slate-50/60 to-slate-100/40">
-                  <Sparkline data={card.trend} width={280} height={48} strokeColor={c.stroke} fillColor={c.fill} className="w-full h-full" />
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
-        <Card
-          title="Recent ledger activity"
-          description="Latest credits and debits across all wallets."
-          actions={
-            <Link href="/ledger" className="inline-flex items-center gap-1 rounded-full border border-indigo-200/70 bg-indigo-50/60 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-50 hover:border-indigo-300/80">
-              View ledger <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          }
-          padding="none"
-        >
-          <ul className="divide-y divide-[var(--border)]">
-            {recentLedger.map((entry) => (
-              <li key={entry.id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors">
-                <div className={cn(
-                  "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
-                  entry.entry_type === "CREDIT" ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
-                )}>
-                  {entry.entry_type === "CREDIT" ? <TrendingUp className="w-4 h-4" /> : <Landmark className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{entry.user_name}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
-                        <span className="font-mono">{entry.sponsor_id}</span> · {entry.source.replace(/_/g, " ").toLowerCase()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={cn("text-sm font-bold tabular-nums", entry.entry_type === "CREDIT" ? "text-emerald-700" : "text-rose-700")}>
-                        {entry.entry_type === "CREDIT" ? "+" : "−"}{formatINR(entry.amount)}
-                      </p>
-                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{formatDate(entry.created_at)}</p>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card
-          title="Recent withdrawal requests"
-          description="Awaiting admin action."
-          actions={
-            <Link href="/payouts" className="inline-flex items-center gap-1 rounded-full border border-indigo-200/70 bg-indigo-50/60 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-50 hover:border-indigo-300/80">
-              View withdrawals <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          }
-          padding="none"
-        >
-          <ul className="divide-y divide-[var(--border)]">
-            {recentPayouts.map((p) => (
-              <li key={p.payout_id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors">
-                <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
-                  <Wallet className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{p.user_name}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">
-                        <span className="font-mono">{p.sponsor_id}</span> · {p.wallet_type} wallet
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-[var(--text-primary)] tabular-nums">{formatINR(p.requested_amount)}</p>
-                      <div className="mt-1"><Badge status={p.status} /></div>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-
-      <Card title="Quick actions" description="Jump into key admin operations.">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { path: "/packages",     icon: PkgIcon,     label: "Manage packages", iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-            { path: "/config",       icon: ShieldAlert, label: "Platform config", iconBg: "bg-indigo-100",  iconColor: "text-indigo-600" },
-            { path: "/ledger",       icon: BookOpen,    label: "Wallet ledger",   iconBg: "bg-sky-100",     iconColor: "text-sky-600" },
-            { path: "/kyc-requests", icon: FileCheck2,  label: "KYC requests",    iconBg: "bg-amber-100",   iconColor: "text-amber-600" },
-          ].map(({ path, icon: Icon, label, iconBg, iconColor }) => (
-            <button
-              key={path}
-              type="button"
-              onClick={() => router.push(path)}
-              className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 text-left transition-all hover:border-slate-200 hover:bg-slate-50 w-full group"
-            >
-              <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", iconBg, iconColor)}>
-                <Icon className="h-5 w-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-900">{label}</p>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          ))}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <p className="text-sm font-semibold text-rose-700">{error}</p>
         </div>
-      </Card>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-12 text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm font-medium">Loading dashboard…</span>
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpiCards.map((card, i) => {
+              const Icon = card.icon;
+              const c = colorMap[card.color];
+              return (
+                <button
+                  key={card.label}
+                  type="button"
+                  onClick={() => router.push(card.path)}
+                  className={cn(
+                    "group relative overflow-hidden rounded-2xl border bg-white p-5 text-left shadow-sm transition-all duration-300",
+                    "hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300",
+                    "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
+                    "animate-card-entrance",
+                    card.alert ? "border-amber-200 ring-1 ring-amber-100" : "border-slate-200/90",
+                  )}
+                  style={{ animationDelay: `${i * 80}ms` }}
+                >
+                  <div className="relative">
+                    <div className="flex items-start justify-between gap-3">
+                      <div
+                        className={cn(
+                          "w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110",
+                          c.bg,
+                          c.icon,
+                        )}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      {card.alert && (
+                        <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse ring-4 ring-amber-500/10" />
+                      )}
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">
+                      {card.value}
+                    </p>
+                    <p className="text-sm font-medium text-slate-500 mt-0.5">{card.label}</p>
+                    <div className="mt-4 h-12 w-full rounded-xl overflow-hidden bg-gradient-to-b from-slate-50/60 to-slate-100/40">
+                      <Sparkline
+                        data={card.trend}
+                        width={280}
+                        height={48}
+                        strokeColor={c.stroke}
+                        fillColor={c.fill}
+                        className="w-full h-full"
+                      />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {incomeCards.map((card, i) => {
+              const Icon = card.icon;
+              const c = colorMap[card.color];
+              return (
+                <button
+                  key={card.label}
+                  type="button"
+                  onClick={() => router.push(card.path)}
+                  className={cn(
+                    "group relative overflow-hidden rounded-2xl border bg-white p-5 text-left shadow-sm transition-all duration-300",
+                    "hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300",
+                    "focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400",
+                    "animate-card-entrance border-slate-200/90",
+                  )}
+                  style={{ animationDelay: `${(kpiCards.length + i) * 80}ms` }}
+                >
+                  <div className="relative">
+                    <div
+                      className={cn(
+                        "w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110",
+                        c.bg,
+                        c.icon,
+                      )}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900 mt-4 tabular-nums">
+                      {card.value}
+                    </p>
+                    <p className="text-sm font-medium text-slate-500 mt-0.5">{card.label}</p>
+                    <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
+                    <div className="mt-4 h-12 w-full rounded-xl overflow-hidden bg-gradient-to-b from-slate-50/60 to-slate-100/40">
+                      <Sparkline
+                        data={card.trend}
+                        width={280}
+                        height={48}
+                        strokeColor={c.stroke}
+                        fillColor={c.fill}
+                        className="w-full h-full"
+                      />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
+            <Card
+              title="Recent ledger activity"
+              description="Latest credits and debits across all wallets."
+              actions={
+                <Link
+                  href="/ledger"
+                  className="inline-flex items-center gap-1 rounded-full border border-indigo-200/70 bg-indigo-50/60 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-50 hover:border-indigo-300/80"
+                >
+                  View ledger <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              }
+              padding="none"
+            >
+              <div className="px-5 py-12 text-center">
+                <p className="text-sm text-[var(--text-muted)]">
+                  No admin ledger API is available yet. Open the ledger page after that integration is added.
+                </p>
+              </div>
+            </Card>
+
+            <Card
+              title="Recent withdrawal requests"
+              description="Latest payout requests across all statuses."
+              actions={
+                <Link
+                  href="/payouts"
+                  className="inline-flex items-center gap-1 rounded-full border border-indigo-200/70 bg-indigo-50/60 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-50 hover:border-indigo-300/80"
+                >
+                  View withdrawals <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              }
+              padding="none"
+            >
+              {s.recentPayouts.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <p className="text-sm text-[var(--text-muted)]">No withdrawal requests yet.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[var(--border)]">
+                  {s.recentPayouts.map((p) => (
+                    <li
+                      key={p.payout_id}
+                      className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
+                        <Wallet className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                              {p.user_name}
+                            </p>
+                            <p className="text-xs text-[var(--text-muted)] truncate">
+                              <span className="font-mono">{p.sponsor_id}</span> · {p.wallet_type}{" "}
+                              wallet
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-[var(--text-primary)] tabular-nums">
+                              {formatINR(p.requested_amount)}
+                            </p>
+                            <div className="mt-1">
+                              <Badge status={p.status} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <Card title="Quick actions" description="Jump into key admin operations.">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                {
+                  path: "/packages",
+                  icon: PkgIcon,
+                  label: "Manage packages",
+                  iconBg: "bg-emerald-100",
+                  iconColor: "text-emerald-600",
+                },
+                {
+                  path: "/config",
+                  icon: ShieldAlert,
+                  label: "Platform config",
+                  iconBg: "bg-indigo-100",
+                  iconColor: "text-indigo-600",
+                },
+                {
+                  path: "/ledger",
+                  icon: BookOpen,
+                  label: "Wallet ledger",
+                  iconBg: "bg-sky-100",
+                  iconColor: "text-sky-600",
+                },
+                {
+                  path: "/kyc-requests",
+                  icon: FileCheck2,
+                  label: "KYC requests",
+                  iconBg: "bg-amber-100",
+                  iconColor: "text-amber-600",
+                },
+              ].map(({ path, icon: Icon, label, iconBg, iconColor }) => (
+                <button
+                  key={path}
+                  type="button"
+                  onClick={() => router.push(path)}
+                  className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 text-left transition-all hover:border-slate-200 hover:bg-slate-50 w-full group"
+                >
+                  <span
+                    className={cn(
+                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                      iconBg,
+                      iconColor,
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-900">
+                      {label}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

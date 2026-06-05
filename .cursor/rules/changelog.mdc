@@ -30,3 +30,11 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 14:45] — Admin dashboard API integration
+
+**What changed:** Dashboard loads KPIs, income aggregates, and recent payouts from existing admin APIs; removed mock-data usage. Ledger section shows empty state until a ledger API exists.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`, `Frontend/Admin/lib/admin-dashboard.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/users`, `GET /api/v1/admin/kyc/requests`, `GET /api/v1/admin/payouts`, `GET /api/v1/admin/config/packages`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+

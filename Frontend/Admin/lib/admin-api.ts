@@ -157,12 +157,13 @@ export interface AdminPayoutRow {
 }
 
 export async function listPayouts(params: {
-  status: string;
+  /** Omit = backend default (PENDING). Pass `""` for all statuses. */
+  status?: string;
   page: number;
   limit: number;
 }): Promise<{ data: AdminPayoutRow[]; total: number; totalPages: number }> {
   const qs = new URLSearchParams();
-  if (params.status) qs.set("status", params.status);
+  if (params.status !== undefined) qs.set("status", params.status);
   qs.set("page", String(params.page));
   qs.set("limit", String(params.limit));
   const res = await apiPaginated<AdminPayoutRow[]>(
