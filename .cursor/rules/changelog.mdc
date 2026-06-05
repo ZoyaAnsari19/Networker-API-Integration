@@ -21,3 +21,12 @@ After EVERY task, append below in the exact format.
 **Branch:** <current-branch-name>  
 
 ---
+
+## [05-06-2026 13:12] — Admin login integration
+
+**What changed:** Replaced demo login redirect with real admin login form that authenticates via backend and stores session tokens.  
+**Files touched:** `Frontend/Admin/app/(auth)/login/page.tsx`  
+**API endpoints used:** `POST /api/v1/auth/login`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
