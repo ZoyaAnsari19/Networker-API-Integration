@@ -62,3 +62,13 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 19:15] — Dashboard ledger mock data restored
+
+**What changed:** Dashboard recent ledger section shows latest entries from `LEDGER_INITIAL` mock data; wallet ledger page continues using the same mock source.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`  
+**API endpoints used:** N/A (mock data)  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+---
+

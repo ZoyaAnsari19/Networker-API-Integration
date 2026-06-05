@@ -27,6 +27,7 @@ import {
   type DashboardStats,
 } from "@/lib/admin-dashboard";
 import { ApiError } from "@/lib/api-client";
+import { LEDGER_INITIAL } from "@/lib/mock-data";
 
 type KpiColorKey = "blue" | "emerald" | "amber" | "violet" | "sky" | "teal" | "rose";
 
@@ -110,6 +111,17 @@ export default function AdminDashboardPage() {
   }, []);
 
   const s = stats ?? EMPTY_STATS;
+
+  const recentLedger = useMemo(
+    () =>
+      [...LEDGER_INITIAL]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )
+        .slice(0, 5),
+    [],
+  );
 
   const kpiCards: Array<{
     label: string;
@@ -363,11 +375,54 @@ export default function AdminDashboardPage() {
               }
               padding="none"
             >
-              <div className="px-5 py-12 text-center">
-                <p className="text-sm text-[var(--text-muted)]">
-                  No admin ledger API is available yet. Open the ledger page after that integration is added.
-                </p>
-              </div>
+              <ul className="divide-y divide-[var(--border)]">
+                {recentLedger.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors"
+                  >
+                    <div
+                      className={cn(
+                        "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
+                        e.entry_type === "CREDIT"
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-rose-500/10 text-rose-600",
+                      )}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                            {e.user_name}
+                          </p>
+                          <p className="text-xs text-[var(--text-muted)] truncate">
+                            <span className="font-mono">{e.sponsor_id}</span> · {e.wallet_type}{" "}
+                            · {e.source.replace(/_/g, " ").toLowerCase()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={cn(
+                              "text-sm font-bold tabular-nums",
+                              e.entry_type === "CREDIT"
+                                ? "text-emerald-700"
+                                : "text-rose-700",
+                            )}
+                          >
+                            {e.entry_type === "CREDIT" ? "+" : "−"}
+                            {formatINR(e.amount)}
+                          </p>
+                          <div className="mt-1">
+                            <Badge status={e.entry_type} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </Card>
 
             <Card
