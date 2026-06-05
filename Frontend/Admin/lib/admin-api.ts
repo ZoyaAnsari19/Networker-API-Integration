@@ -68,7 +68,7 @@ export async function listCommissionConfigs(): Promise<CommissionConfigRow[]> {
   const env = await apiJson<ApiEnvelope<CommissionConfigRow[]>>(
     "/api/v1/admin/config/commissions",
   );
-  return unwrapData(env);
+  return unwrapData(env) ?? [];
 }
 
 export async function updateCommissionConfig(
@@ -88,7 +88,7 @@ export async function listPayoutConfigs(): Promise<PayoutConfigRow[]> {
   const env = await apiJson<ApiEnvelope<PayoutConfigRow[]>>(
     "/api/v1/admin/config/payout",
   );
-  return unwrapData(env);
+  return unwrapData(env) ?? [];
 }
 
 export async function updatePayoutConfig(
@@ -259,5 +259,37 @@ export async function updateKycRequest(
         input.status === "REJECTED" ? input.rejection_reason : undefined,
     },
   });
+}
+
+export interface ApiLedgerEntry {
+  id: number;
+  user_id: string;
+  wallet_type: string;
+  amount: number;
+  entry_type: string;
+  source: string;
+  reference_id?: string | null;
+  reference_type?: string | null;
+  description?: string | null;
+  payer_name?: string | null;
+  created_at: string;
+}
+
+export async function listWalletLedger(params: {
+  walletType: "DIRECT" | "TEAM";
+  page: number;
+  limit: number;
+}): Promise<{ data: ApiLedgerEntry[]; total: number; totalPages: number }> {
+  const qs = new URLSearchParams();
+  qs.set("page", String(params.page));
+  qs.set("limit", String(params.limit));
+  const res = await apiPaginated<ApiLedgerEntry[]>(
+    `/api/v1/wallets/${params.walletType}/ledger?${qs.toString()}`,
+  );
+  return {
+    data: res.data,
+    total: res.meta.total,
+    totalPages: res.meta.total_pages,
+  };
 }
 

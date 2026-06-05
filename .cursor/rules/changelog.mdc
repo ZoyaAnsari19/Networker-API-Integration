@@ -94,5 +94,37 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 21:05] — Admin platform config API integration
+
+**What changed:** Platform config page loads commission, payout, and P2P settings from admin config APIs; per-key save calls PUT endpoints; mock data removed and config keys aligned with backend schema.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/config/page.tsx`, `Frontend/Admin/lib/admin-platform-config.ts`, `Frontend/Admin/lib/constants.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/config/commissions`, `PUT /api/v1/admin/config/commissions`, `GET /api/v1/admin/config/payout`, `PUT /api/v1/admin/config/payout`  
+**Breaking change:** NO  
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:35] — Admin wallet ledger API integration
+
+**What changed:** Wallet ledger page and dashboard recent ledger load DIRECT/TEAM entries from wallet ledger API with user enrichment; mock `LEDGER_INITIAL` usage removed from those screens. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/ledger/page.tsx`, `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`, `Frontend/Admin/lib/admin-api.ts`, `Frontend/Admin/lib/admin-ledger.ts` 
+**API endpoints used:** `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/wallets/TEAM/ledger`, `GET /api/v1/admin/users` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:45] — Backend API server restarted
+
+**What changed:** Stopped stale process on port 3100, rebuilt `fb-server.exe`, and started fresh backend API server. 
+**Files touched:** N/A 
+**API endpoints used:** `GET /health` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:50] — User frontend dev server started
+
+**What changed:** Restarted User UI dev server on port 4001 in terminal after clearing stale process on the same port. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
 ---
 

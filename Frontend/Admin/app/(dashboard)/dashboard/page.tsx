@@ -26,8 +26,8 @@ import {
   loadDashboardStats,
   type DashboardStats,
 } from "@/lib/admin-dashboard";
+import { fetchRecentLedgerRows, type LedgerRow } from "@/lib/admin-ledger";
 import { ApiError } from "@/lib/api-client";
-import { LEDGER_INITIAL } from "@/lib/mock-data";
 
 type KpiColorKey = "blue" | "emerald" | "amber" | "violet" | "sky" | "teal" | "rose";
 
@@ -68,6 +68,7 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [todayLine, setTodayLine] = useState("");
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentLedger, setRecentLedger] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,8 +89,14 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await loadDashboardStats();
-        if (!cancelled) setStats(data);
+        const [data, ledger] = await Promise.all([
+          loadDashboardStats(),
+          fetchRecentLedgerRows(5),
+        ]);
+        if (!cancelled) {
+          setStats(data);
+          setRecentLedger(ledger);
+        }
       } catch (err) {
         if (!cancelled) {
           const msg =
@@ -100,6 +107,7 @@ export default function AdminDashboardPage() {
                 : "Failed to load dashboard";
           setError(msg);
           setStats(EMPTY_STATS);
+          setRecentLedger([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -111,17 +119,6 @@ export default function AdminDashboardPage() {
   }, []);
 
   const s = stats ?? EMPTY_STATS;
-
-  const recentLedger = useMemo(
-    () =>
-      [...LEDGER_INITIAL]
-        .sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        )
-        .slice(0, 5),
-    [],
-  );
 
   const kpiCards: Array<{
     label: string;
@@ -376,11 +373,16 @@ export default function AdminDashboardPage() {
               padding="none"
             >
               <ul className="divide-y divide-[var(--border)]">
-                {recentLedger.map((e) => (
-                  <li
-                    key={e.id}
-                    className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors"
-                  >
+                {recentLedger.length === 0 ? (
+                  <li className="px-5 py-10 text-center text-sm text-[var(--text-muted)]">
+                    No recent ledger activity.
+                  </li>
+                ) : (
+                  recentLedger.map((e) => (
+                    <li
+                      key={`${e.wallet_type}-${e.id}`}
+                      className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50/80 transition-colors"
+                    >
                     <div
                       className={cn(
                         "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
@@ -421,7 +423,8 @@ export default function AdminDashboardPage() {
                       </div>
                     </div>
                   </li>
-                ))}
+                  ))
+                )}
               </ul>
             </Card>
 
