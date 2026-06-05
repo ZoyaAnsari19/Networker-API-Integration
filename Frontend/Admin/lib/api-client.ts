@@ -125,7 +125,8 @@ export async function apiPaginated<T>(
     throw new ApiError(res.status, parsed.error || "Request failed");
   }
 
-  return { data: parsed.data, meta: parsed.meta };
+  // Backend may serialize empty slices as `null` (e.g. zero payout rows).
+  return { data: (parsed.data ?? []) as T, meta: parsed.meta };
 }
 
 export function unwrapData<T>(envelope: ApiEnvelope<T>): T {

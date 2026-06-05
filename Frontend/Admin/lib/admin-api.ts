@@ -17,7 +17,7 @@ export async function listPackages(): Promise<AdminPackage[]> {
   const env = await apiJson<ApiEnvelope<AdminPackage[]>>(
     "/api/v1/admin/config/packages",
   );
-  return unwrapData(env);
+  return unwrapData(env) ?? [];
 }
 
 export async function createPackage(input: {

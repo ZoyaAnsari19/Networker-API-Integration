@@ -70,5 +70,29 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 20:10] — Fix dashboard null map error on empty payouts
+
+**What changed:** Normalized paginated API `data: null` to empty arrays so dashboard and payouts pages do not crash when payout list is empty.  
+**Files touched:** `Frontend/Admin/lib/api-client.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/payouts`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 20:20] — Backend API server restarted
+
+**What changed:** Stopped stale process on port 3100, rebuilt `fb-server.exe`, and started fresh backend API server.  
+**Files touched:** N/A  
+**API endpoints used:** `GET /health`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 20:42] — Backend API server restarted (clean)
+
+**What changed:** Killed process on port 3100, rebuilt and started fresh `fb-server.exe`; health check OK.  
+**Files touched:** N/A  
+**API endpoints used:** `GET /health`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
 ---
 
