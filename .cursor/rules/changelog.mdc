@@ -126,5 +126,13 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO 
 **Branch:** zoya-dev 
 
+## [05-06-2026 22:05] — Admin direct income API integration
+
+**What changed:** Direct income page loads DIRECT wallet ledger credits (`DIRECT_COMMISSION`, `FRANCHISE_COMMISSION`) with user enrichment and estimated BV from commission config; mock data removed. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/income/direct/page.tsx`, `Frontend/Admin/lib/admin-direct-income.ts` 
+**API endpoints used:** `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/admin/users`, `GET /api/v1/admin/config/commissions` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
 ---
 
