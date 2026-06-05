@@ -121,6 +121,8 @@ export interface AdminUserRow {
   placement_status: string;
   created_at: string;
   updated_at: string;
+  secure_wallet_external_id?: string | null;
+  secure_wallet_balance_paise?: number | null;
 }
 
 export async function listUsers(params: {

@@ -38,3 +38,11 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 15:30] — Admin networkers page API integration
+
+**What changed:** Networkers list loads from admin users API with server pagination, status filter, and package mapping; removed mock data and local-only block/wallet manage actions.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/users/page.tsx`, `Frontend/Admin/lib/admin-networkers.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/users`, `GET /api/v1/admin/config/packages`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
