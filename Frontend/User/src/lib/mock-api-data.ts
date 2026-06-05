@@ -4,8 +4,6 @@
 import {
   currentUser,
   binaryStatus,
-  leftTeamMembers,
-  rightTeamMembers,
   referralStats,
   earningsData,
 } from '@/lib/dummy-data';
@@ -241,37 +239,6 @@ export const mockPackages = [
     sort_order: 4,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
-  },
-];
-
-export const mockDirectReferrals = [
-  ...leftTeamMembers.filter((m) => m.isDirect),
-  ...rightTeamMembers.filter((m) => m.isDirect),
-].map((m, i) => ({
-  user_id: m.id,
-  sponsor_id: `REF${String(i + 1).padStart(3, '0')}`,
-  full_name: m.name,
-  email: m.email,
-  phone: m.phone,
-  status: (m.status === 'active' ? 'ACTIVE' : 'INACTIVE') as
-    | 'ACTIVE'
-    | 'INACTIVE'
-    | 'BLOCKED',
-  placement_status: 'PLACED' as const,
-  leg: (m.side === 'left' ? 'LEFT' : 'RIGHT') as 'LEFT' | 'RIGHT',
-  package_name: m.package,
-  total_direct_earned: Math.floor(m.volume * 10),
-  created_at: m.joinedAt,
-}));
-
-export const mockPlacementRequests = [
-  {
-    id: 'pl_001',
-    user_id: 'usr_pending_1',
-    sponsor_user_id: currentUser.id,
-    status: 'PENDING',
-    expires_at: daysAgo(-3),
-    created_at: daysAgo(1),
   },
 ];
 
