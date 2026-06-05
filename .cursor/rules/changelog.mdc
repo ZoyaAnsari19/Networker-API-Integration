@@ -21,3 +21,118 @@ After EVERY task, append below in the exact format.
 **Branch:** <current-branch-name>  
 
 ---
+
+## [05-06-2026 13:12] — Admin login integration
+
+**What changed:** Replaced demo login redirect with real admin login form that authenticates via backend and stores session tokens.  
+**Files touched:** `Frontend/Admin/app/(auth)/login/page.tsx`  
+**API endpoints used:** `POST /api/v1/auth/login`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 14:45] — Admin dashboard API integration
+
+**What changed:** Dashboard loads KPIs, income aggregates, and recent payouts from existing admin APIs; removed mock-data usage. Ledger section shows empty state until a ledger API exists.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`, `Frontend/Admin/lib/admin-dashboard.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/users`, `GET /api/v1/admin/kyc/requests`, `GET /api/v1/admin/payouts`, `GET /api/v1/admin/config/packages`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 15:30] — Admin networkers page API integration
+
+**What changed:** Networkers list loads from admin users API with server pagination, status filter, and package mapping; removed mock data and local-only block/wallet manage actions.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/users/page.tsx`, `Frontend/Admin/lib/admin-networkers.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/users`, `GET /api/v1/admin/config/packages`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 16:15] — Admin KYC page API integration
+
+**What changed:** KYC list/detail load from admin KYC APIs with user enrichment; approve/reject calls PATCH; mock data removed.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/kyc-requests/page.tsx`, `Frontend/Admin/lib/admin-kyc.ts`  
+**API endpoints used:** `GET /api/v1/admin/kyc/requests`, `GET /api/v1/admin/kyc/requests/:kycId`, `PATCH /api/v1/admin/kyc/requests/:kycId`, `GET /api/v1/admin/users`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 17:00] — Admin withdrawals page API integration
+
+**What changed:** Withdrawal requests list loads from admin payouts API with user enrichment; approve/reject call real endpoints; mock data removed.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/payouts/page.tsx`, `Frontend/Admin/lib/admin-payouts.ts`  
+**API endpoints used:** `GET /api/v1/admin/payouts`, `POST /api/v1/admin/payouts/:id/approve`, `POST /api/v1/admin/payouts/:id/reject`, `GET /api/v1/admin/users`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 19:15] — Dashboard ledger mock data restored
+
+**What changed:** Dashboard recent ledger section shows latest entries from `LEDGER_INITIAL` mock data; wallet ledger page continues using the same mock source.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`  
+**API endpoints used:** N/A (mock data)  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 20:10] — Fix dashboard null map error on empty payouts
+
+**What changed:** Normalized paginated API `data: null` to empty arrays so dashboard and payouts pages do not crash when payout list is empty.  
+**Files touched:** `Frontend/Admin/lib/api-client.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/payouts`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 20:20] — Backend API server restarted
+
+**What changed:** Stopped stale process on port 3100, rebuilt `fb-server.exe`, and started fresh backend API server.  
+**Files touched:** N/A  
+**API endpoints used:** `GET /health`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 20:42] — Backend API server restarted (clean)
+
+**What changed:** Killed process on port 3100, rebuilt and started fresh `fb-server.exe`; health check OK.  
+**Files touched:** N/A  
+**API endpoints used:** `GET /health`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
+## [05-06-2026 21:05] — Admin platform config API integration
+
+**What changed:** Platform config page loads commission, payout, and P2P settings from admin config APIs; per-key save calls PUT endpoints; mock data removed and config keys aligned with backend schema.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/config/page.tsx`, `Frontend/Admin/lib/admin-platform-config.ts`, `Frontend/Admin/lib/constants.ts`, `Frontend/Admin/lib/admin-api.ts`  
+**API endpoints used:** `GET /api/v1/admin/config/commissions`, `PUT /api/v1/admin/config/commissions`, `GET /api/v1/admin/config/payout`, `PUT /api/v1/admin/config/payout`  
+**Breaking change:** NO  
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:35] — Admin wallet ledger API integration
+
+**What changed:** Wallet ledger page and dashboard recent ledger load DIRECT/TEAM entries from wallet ledger API with user enrichment; mock `LEDGER_INITIAL` usage removed from those screens. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/ledger/page.tsx`, `Frontend/Admin/app/(dashboard)/dashboard/page.tsx`, `Frontend/Admin/lib/admin-api.ts`, `Frontend/Admin/lib/admin-ledger.ts` 
+**API endpoints used:** `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/wallets/TEAM/ledger`, `GET /api/v1/admin/users` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:45] — Backend API server restarted
+
+**What changed:** Stopped stale process on port 3100, rebuilt `fb-server.exe`, and started fresh backend API server. 
+**Files touched:** N/A 
+**API endpoints used:** `GET /health` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [05-06-2026 21:50] — User frontend dev server started
+
+**What changed:** Restarted User UI dev server on port 4001 in terminal after clearing stale process on the same port. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [05-06-2026 22:05] — Admin direct income API integration
+
+**What changed:** Direct income page loads DIRECT wallet ledger credits (`DIRECT_COMMISSION`, `FRANCHISE_COMMISSION`) with user enrichment and estimated BV from commission config; mock data removed. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/income/direct/page.tsx`, `Frontend/Admin/lib/admin-direct-income.ts` 
+**API endpoints used:** `GET /api/v1/wallets/DIRECT/ledger`, `GET /api/v1/admin/users`, `GET /api/v1/admin/config/commissions` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+---
+
