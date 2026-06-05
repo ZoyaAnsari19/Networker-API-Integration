@@ -54,3 +54,11 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO  
 **Branch:** zoya-dev  
 
+## [05-06-2026 17:00] — Admin withdrawals page API integration
+
+**What changed:** Withdrawal requests list loads from admin payouts API with user enrichment; approve/reject call real endpoints; mock data removed.  
+**Files touched:** `Frontend/Admin/app/(dashboard)/payouts/page.tsx`, `Frontend/Admin/lib/admin-payouts.ts`  
+**API endpoints used:** `GET /api/v1/admin/payouts`, `POST /api/v1/admin/payouts/:id/approve`, `POST /api/v1/admin/payouts/:id/reject`, `GET /api/v1/admin/users`  
+**Breaking change:** NO  
+**Branch:** zoya-dev  
+
