@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FMCG-Binary API
-  version: 1.0.10
+  version: 1.0.11
   description: |
     API for the FMCG-Binary MLM commission platform.
 
@@ -1125,6 +1125,722 @@ paths:
         "401":
           $ref: "#/components/responses/Error"
 
+  /api/v1/admin/users/{id}:
+    get:
+      tags: [Admin (JWT)]
+      summary: Get networker by id (admin)
+      description: Returns a single NETWORKER account. Admin and sub-admin staff accounts are not manageable via this API.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Networker profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+    patch:
+      tags: [Admin (JWT)]
+      summary: Update networker status (admin)
+      description: Sets account status to ACTIVE, INACTIVE, or BLOCKED. Writes an audit log entry.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateUserStatusRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessUserResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{id}/wallets:
+    get:
+      tags: [Admin (JWT)]
+      summary: Get networker wallet balances (admin)
+      description: Returns DIRECT, TEAM, and total balances in paise for the specified networker.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Wallet summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminUserWalletSummary"
+        "404":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{id}/wallets/{type}/ledger:
+    get:
+      tags: [Admin (JWT)]
+      summary: Get networker wallet ledger (admin)
+      description: Paginated ledger for a specific networker's DIRECT or TEAM wallet. Same row shape as `GET /api/v1/wallets/{type}/ledger`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [DIRECT, TEAM]
+        - in: query
+          name: page
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+      responses:
+        "200":
+          description: Paginated ledger rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLedgerEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{id}/wallet/adjust:
+    post:
+      tags: [Admin (JWT)]
+      summary: Adjust networker wallet (admin)
+      description: |
+        Credits or debits a networker's DIRECT or TEAM wallet using `ADMIN_ADJUSTMENT` ledger source.
+        Debits fail when the wallet balance would go negative. All adjustments are audit-logged.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminWalletAdjustRequest"
+      responses:
+        "200":
+          description: Adjustment applied
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminWalletAdjustResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/topics:
+    get:
+      tags: [Support (JWT)]
+      summary: List active support topics (networker)
+      description: Pre-question topics shown when creating a new ticket.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active topics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SupportTopic"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/tickets:
+    get:
+      tags: [Support (JWT)]
+      summary: List my support tickets
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, in_progress, closed]
+      responses:
+        "200":
+          description: Ticket list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SupportTicket"
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Support (JWT)]
+      summary: Create a support ticket
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupportTicketRequest"
+      responses:
+        "201":
+          description: Ticket created with first message
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicketDetail"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/tickets/{id}:
+    get:
+      tags: [Support (JWT)]
+      summary: Get my ticket with message thread
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ticket detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicketDetail"
+        "404":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/tickets/{id}/messages:
+    post:
+      tags: [Support (JWT)]
+      summary: Post a follow-up message on my ticket
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostSupportMessageRequest"
+      responses:
+        "201":
+          description: Message posted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportMessage"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/tickets/{id}/attachments:
+    post:
+      tags: [Support (JWT)]
+      summary: Upload attachment on my ticket
+      description: Multipart field `file`. Max 20 MB. Requires B2 storage configured on the server.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment uploaded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportAttachment"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/support/tickets/{id}/close:
+    post:
+      tags: [Support (JWT)]
+      summary: Close my ticket
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ticket closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets:
+    get:
+      tags: [Admin (JWT)]
+      summary: List support tickets (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [open, in_progress, closed]
+        - in: query
+          name: assigned
+          schema:
+            type: string
+            enum: [me, unassigned]
+          description: Filter by assignment. Use `assigned_to` UUID for a specific staff member.
+        - in: query
+          name: assigned_to
+          schema: { type: string, format: uuid }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        "200":
+          description: Paginated tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SupportTicket"
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer, format: int64 }
+                      total_pages: { type: integer, format: int64 }
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}:
+    get:
+      tags: [Admin (JWT)]
+      summary: Get support ticket detail (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Ticket with messages
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicketDetail"
+        "404":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}/assign-to-me:
+    post:
+      tags: [Admin (JWT)]
+      summary: Assign ticket to current admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Assigned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}/messages:
+    post:
+      tags: [Admin (JWT)]
+      summary: Reply on assigned ticket (admin)
+      description: Admin must assign the ticket to themselves before replying.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostSupportMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportMessage"
+        "403":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}/attachments:
+    post:
+      tags: [Admin (JWT)]
+      summary: Upload attachment on assigned ticket (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Attachment uploaded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportAttachment"
+        "403":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}/close:
+    post:
+      tags: [Admin (JWT)]
+      summary: Close support ticket (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicket"
+        "403":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/tickets/{id}/reassign:
+    post:
+      tags: [Admin (JWT)]
+      summary: Reassign or unassign ticket (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignSupportTicketRequest"
+      responses:
+        "200":
+          description: Reassigned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTicket"
+        "403":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/topics:
+    get:
+      tags: [Admin (JWT)]
+      summary: List all support topics (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Topics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SupportTopic"
+        "401":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Admin (JWT)]
+      summary: Create support topic
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupportTopicRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTopic"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/support/topics/{id}:
+    put:
+      tags: [Admin (JWT)]
+      summary: Update support topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSupportTopicRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessAnyResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/SupportTopic"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Admin (JWT)]
+      summary: Delete support topic
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          $ref: "#/components/schemas/SuccessAnyResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+
   /api/v1/admin/payouts:
     get:
       tags: [Admin (JWT)]
@@ -1784,6 +2500,162 @@ components:
         message: { type: string }
         data:
           $ref: "#/components/schemas/UserProfile"
+
+    AdminUpdateUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, BLOCKED]
+        admin_note:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    AdminWalletAdjustRequest:
+      type: object
+      required: [wallet_type, entry_type, amount, reason]
+      properties:
+        wallet_type:
+          type: string
+          enum: [DIRECT, TEAM]
+        entry_type:
+          type: string
+          enum: [CREDIT, DEBIT]
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Amount in paise (always positive).
+        reason:
+          type: string
+          maxLength: 500
+          description: Human-readable reason stored on the ledger row.
+        admin_note:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    AdminUserWalletSummary:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        sponsor_id: { type: string, example: SPF00001 }
+        direct_balance: { type: integer, format: int64, description: Paise }
+        team_balance: { type: integer, format: int64, description: Paise }
+        total_balance: { type: integer, format: int64, description: Paise }
+
+    AdminWalletAdjustResult:
+      type: object
+      properties:
+        ledger_id: { type: integer, format: int64 }
+        user_id: { type: string, format: uuid }
+        wallet_type: { type: string, enum: [DIRECT, TEAM] }
+        entry_type: { type: string, enum: [CREDIT, DEBIT] }
+        amount: { type: integer, format: int64, description: Paise }
+        direct_balance: { type: integer, format: int64, description: Paise after adjustment }
+        team_balance: { type: integer, format: int64, description: Paise after adjustment }
+        total_balance: { type: integer, format: int64, description: Paise after adjustment }
+
+    SupportTopic:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        question: { type: string }
+        category: { type: string, nullable: true }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SupportAttachment:
+      type: object
+      properties:
+        url: { type: string }
+        type: { type: string }
+        filename: { type: string }
+
+    SupportMessage:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        ticket_id: { type: string, format: uuid }
+        sender_type: { type: string, enum: [user, admin, system] }
+        sender_user_id: { type: string, format: uuid, nullable: true }
+        sender_name: { type: string, nullable: true }
+        message_text: { type: string, nullable: true }
+        attachment_urls:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportAttachment"
+        created_at: { type: string, format: date-time }
+
+    SupportTicket:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        user_full_name: { type: string, nullable: true }
+        user_sponsor_id: { type: string, nullable: true }
+        user_email: { type: string, nullable: true }
+        pre_question_id: { type: integer, format: int64, nullable: true }
+        pre_question: { type: string, nullable: true }
+        subject: { type: string, nullable: true }
+        status: { type: string, enum: [open, in_progress, closed] }
+        assigned_to: { type: string, format: uuid, nullable: true }
+        assigned_to_name: { type: string, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+        closed_by_user_id: { type: string, format: uuid, nullable: true }
+        last_message_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    SupportTicketDetail:
+      type: object
+      properties:
+        ticket:
+          $ref: "#/components/schemas/SupportTicket"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportMessage"
+
+    CreateSupportTicketRequest:
+      type: object
+      required: [message]
+      properties:
+        pre_question_id: { type: integer, format: int64, nullable: true }
+        subject: { type: string, maxLength: 200 }
+        message: { type: string, maxLength: 8000 }
+
+    PostSupportMessageRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, maxLength: 8000 }
+
+    ReassignSupportTicketRequest:
+      type: object
+      properties:
+        assigned_to: { type: string, format: uuid, nullable: true, description: Omit or null to unassign }
+
+    CreateSupportTopicRequest:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string, maxLength: 200 }
+        category: { type: string, maxLength: 80, nullable: true }
+        sort_order: { type: integer, default: 0 }
+        is_active: { type: boolean, default: true }
+
+    UpdateSupportTopicRequest:
+      type: object
+      properties:
+        question: { type: string, maxLength: 200 }
+        category: { type: string, maxLength: 80, nullable: true }
+        sort_order: { type: integer }
+        is_active: { type: boolean }
 
     LedgerEntry:
       type: object

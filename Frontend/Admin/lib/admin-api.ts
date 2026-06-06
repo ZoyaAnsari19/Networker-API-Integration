@@ -293,3 +293,236 @@ export async function listWalletLedger(params: {
   };
 }
 
+export async function getUser(userId: string): Promise<AdminUserRow> {
+  const env = await apiJson<ApiEnvelope<AdminUserRow>>(
+    `/api/v1/admin/users/${userId}`,
+  );
+  return unwrapData(env);
+}
+
+export async function updateUserStatus(
+  userId: string,
+  input: { status: "ACTIVE" | "INACTIVE" | "BLOCKED"; admin_note?: string },
+): Promise<AdminUserRow> {
+  const env = await apiJson<ApiEnvelope<AdminUserRow>>(
+    `/api/v1/admin/users/${userId}`,
+    { method: "PATCH", body: input },
+  );
+  return unwrapData(env);
+}
+
+export interface AdminUserWalletSummary {
+  user_id: string;
+  sponsor_id: string;
+  direct_balance: number;
+  team_balance: number;
+  total_balance: number;
+}
+
+export async function getUserWallets(
+  userId: string,
+): Promise<AdminUserWalletSummary> {
+  const env = await apiJson<ApiEnvelope<AdminUserWalletSummary>>(
+    `/api/v1/admin/users/${userId}/wallets`,
+  );
+  return unwrapData(env);
+}
+
+export async function getUserWalletLedger(params: {
+  userId: string;
+  walletType: "DIRECT" | "TEAM";
+  page: number;
+  limit: number;
+}): Promise<{ data: ApiLedgerEntry[]; total: number; totalPages: number }> {
+  const qs = new URLSearchParams();
+  qs.set("page", String(params.page));
+  qs.set("limit", String(params.limit));
+  const res = await apiPaginated<ApiLedgerEntry[]>(
+    `/api/v1/admin/users/${params.userId}/wallets/${params.walletType}/ledger?${qs.toString()}`,
+  );
+  return {
+    data: res.data,
+    total: res.meta.total,
+    totalPages: res.meta.total_pages,
+  };
+}
+
+export interface AdminWalletAdjustResult {
+  ledger_id: number;
+  user_id: string;
+  wallet_type: "DIRECT" | "TEAM";
+  entry_type: "CREDIT" | "DEBIT";
+  amount: number;
+  direct_balance: number;
+  team_balance: number;
+  total_balance: number;
+}
+
+export async function adjustUserWallet(
+  userId: string,
+  input: {
+    wallet_type: "DIRECT" | "TEAM";
+    entry_type: "CREDIT" | "DEBIT";
+    amount: number;
+    reason: string;
+    admin_note?: string;
+  },
+): Promise<AdminWalletAdjustResult> {
+  const env = await apiJson<ApiEnvelope<AdminWalletAdjustResult>>(
+    `/api/v1/admin/users/${userId}/wallet/adjust`,
+    { method: "POST", body: input },
+  );
+  return unwrapData(env);
+}
+
+export type SupportTicketStatus = "open" | "in_progress" | "closed";
+
+export interface SupportTopic {
+  id: number;
+  question: string;
+  category?: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SupportAttachment {
+  url: string;
+  type: string;
+  filename: string;
+}
+
+export interface SupportMessage {
+  id: number;
+  ticket_id: string;
+  sender_type: "user" | "admin" | "system";
+  sender_user_id?: string | null;
+  sender_name?: string | null;
+  message_text?: string | null;
+  attachment_urls: SupportAttachment[];
+  created_at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  user_id: string;
+  user_full_name?: string | null;
+  user_sponsor_id?: string | null;
+  user_email?: string | null;
+  pre_question_id?: number | null;
+  pre_question?: string | null;
+  subject?: string | null;
+  status: SupportTicketStatus;
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
+  closed_at?: string | null;
+  last_message_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportTicketDetail {
+  ticket: SupportTicket;
+  messages: SupportMessage[];
+}
+
+export async function listSupportTickets(params: {
+  status?: string;
+  assigned?: "me" | "unassigned";
+  search?: string;
+  page: number;
+  limit: number;
+}): Promise<{ data: SupportTicket[]; total: number; totalPages: number }> {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.assigned) qs.set("assigned", params.assigned);
+  if (params.search?.trim()) qs.set("search", params.search.trim());
+  qs.set("page", String(params.page));
+  qs.set("limit", String(params.limit));
+  const res = await apiPaginated<SupportTicket[]>(
+    `/api/v1/admin/support/tickets?${qs.toString()}`,
+  );
+  return {
+    data: res.data,
+    total: res.meta.total,
+    totalPages: res.meta.total_pages,
+  };
+}
+
+export async function getSupportTicket(id: string): Promise<SupportTicketDetail> {
+  const env = await apiJson<ApiEnvelope<SupportTicketDetail>>(
+    `/api/v1/admin/support/tickets/${id}`,
+  );
+  return unwrapData(env);
+}
+
+export async function assignSupportTicketToMe(id: string): Promise<SupportTicket> {
+  const env = await apiJson<ApiEnvelope<SupportTicket>>(
+    `/api/v1/admin/support/tickets/${id}/assign-to-me`,
+    { method: "POST", body: {} },
+  );
+  return unwrapData(env);
+}
+
+export async function postAdminSupportMessage(
+  id: string,
+  message: string,
+): Promise<SupportMessage> {
+  const env = await apiJson<ApiEnvelope<SupportMessage>>(
+    `/api/v1/admin/support/tickets/${id}/messages`,
+    { method: "POST", body: { message } },
+  );
+  return unwrapData(env);
+}
+
+export async function closeSupportTicketAdmin(id: string): Promise<SupportTicket> {
+  const env = await apiJson<ApiEnvelope<SupportTicket>>(
+    `/api/v1/admin/support/tickets/${id}/close`,
+    { method: "POST", body: {} },
+  );
+  return unwrapData(env);
+}
+
+export async function listSupportTopicsAdmin(): Promise<SupportTopic[]> {
+  const env = await apiJson<ApiEnvelope<SupportTopic[]>>(
+    "/api/v1/admin/support/topics",
+  );
+  return unwrapData(env) ?? [];
+}
+
+export async function createSupportTopic(input: {
+  question: string;
+  category?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}): Promise<SupportTopic> {
+  const env = await apiJson<ApiEnvelope<SupportTopic>>(
+    "/api/v1/admin/support/topics",
+    { method: "POST", body: input },
+  );
+  return unwrapData(env);
+}
+
+export async function updateSupportTopic(
+  id: number,
+  patch: Partial<{
+    question: string;
+    category: string | null;
+    sort_order: number;
+    is_active: boolean;
+  }>,
+): Promise<SupportTopic> {
+  const env = await apiJson<ApiEnvelope<SupportTopic>>(
+    `/api/v1/admin/support/topics/${id}`,
+    { method: "PUT", body: patch },
+  );
+  return unwrapData(env);
+}
+
+export async function deleteSupportTopic(id: number): Promise<void> {
+  await apiJson<ApiEnvelope<null>>(`/api/v1/admin/support/topics/${id}`, {
+    method: "DELETE",
+  });
+}
+

@@ -22,6 +22,9 @@ const STATUS_CONFIG: Record<string, { variant: BadgeVariant; icon?: React.ReactN
   RENEWED:           { variant: "info",    icon: <CheckCircle2 className="w-3 h-3" />,  label: "Renewed" },
   CREDIT:            { variant: "success", label: "Credit" },
   DEBIT:             { variant: "danger",  label: "Debit" },
+  open:              { variant: "warning", icon: <Clock className="w-3 h-3" />,         label: "Open" },
+  in_progress:       { variant: "info",    icon: <Clock className="w-3 h-3" />,         label: "In progress" },
+  closed:            { variant: "neutral", icon: <CheckCircle2 className="w-3 h-3" />, label: "Closed" },
 };
 
 const variantClasses: Record<BadgeVariant, string> = {

@@ -19,8 +19,10 @@ import {
   Wallet,
   FileCheck2,
   Megaphone,
+  Headphones,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAdminAuthStore } from "@/stores/useAdminAuthStore";
 
 type NavItem = {
   path: string;
@@ -34,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: "/users",                icon: Users,           label: "Networkers",          group: "ops" },
   { path: "/kyc-requests",         icon: FileCheck2,      label: "KYC Requests",        group: "ops" },
   { path: "/payouts",              icon: Landmark,        label: "Withdrawal requests", group: "ops" },
+  { path: "/support",              icon: Headphones,      label: "Support",             group: "ops" },
 
   { path: "/ledger",               icon: BookOpen,        label: "Wallet Ledger",       group: "reports" },
   { path: "/income/direct",        icon: TrendingUp,      label: "Direct Income",       group: "reports" },
@@ -56,6 +59,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const { user, logout } = useAdminAuthStore();
+
+  const displayName = user?.name ?? "Admin";
+  const displayEmail = user?.email ?? "";
+  const userInitial = (displayName.trim()[0] ?? "A").toUpperCase();
+
+  const handleSignOut = () => {
+    setUserMenuOpen(false);
+    logout();
+    router.replace("/login");
+  };
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -68,12 +82,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [userMenuOpen]);
 
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
-
-  useEffect(() => {
-    if (pathname === "/login") {
-      router.replace("/dashboard");
-    }
-  }, [pathname, router]);
 
   const isItemActive = (item: NavItem) => pathname === item.path || pathname?.startsWith(item.path + "/");
 
@@ -132,11 +140,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--text-primary)] to-[var(--text-secondary)] flex items-center justify-center text-white font-bold text-xs">
-                  A
+                  {userInitial}
                 </div>
                 <div className="hidden sm:block text-left leading-none">
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">Admin</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">admin@fmcg-binary.io</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{displayName}</p>
+                  {displayEmail ? (
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{displayEmail}</p>
+                  ) : null}
                 </div>
                 <ChevronDown className={cn("w-4 h-4 text-[var(--text-muted)] transition-transform duration-200 hidden sm:block", userMenuOpen && "rotate-180")} />
               </button>
@@ -144,8 +154,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {userMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-60 py-2 bg-white rounded-xl border border-[var(--border)] shadow-[var(--shadow-xl)] animate-fade-in">
                   <div className="px-4 py-3 border-b border-[var(--border)]">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Admin</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">admin@fmcg-binary.io</p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{displayName}</p>
+                    {displayEmail ? (
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{displayEmail}</p>
+                    ) : null}
                   </div>
                   <div className="px-2 py-1">
                     <button
@@ -158,7 +170,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { router.push("/dashboard"); setUserMenuOpen(false); }}
+                      onClick={handleSignOut}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[var(--danger-500)] hover:text-[var(--danger-600)] hover:bg-[var(--danger-50)] transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
@@ -238,7 +250,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
             <button
               type="button"
-              onClick={() => router.push("/dashboard")}
+              onClick={handleSignOut}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[var(--danger-500)] hover:text-[var(--danger-600)] hover:bg-[var(--danger-50)] transition-colors"
             >
               <LogOut className="w-[18px] h-[18px]" />

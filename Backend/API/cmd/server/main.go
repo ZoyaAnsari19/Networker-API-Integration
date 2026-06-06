@@ -63,6 +63,9 @@ func main() {
 	kycRepo := repository.NewKYCRepo(db)
 	p2pRepo := repository.NewP2PRepo(db)
 	heldIncomeRepo := repository.NewHeldIncomeRepo(db)
+	auditRepo := repository.NewAuditRepo(db)
+	supportRepo := repository.NewSupportRepo(db)
+	staffRepo := repository.NewStaffRepo(db)
 
 	if cfg.FMCGAPIKey != "" && cfg.FMCGAPISecret != "" {
 		if err := apiKeyRepo.UpsertActiveKey(context.Background(), "Secure-Pharma FMCG", cfg.FMCGAPIKey, cfg.FMCGAPISecret); err != nil {
@@ -112,6 +115,9 @@ func main() {
 	}
 	kycService := services.NewKYCService(kycRepo, b2Client)
 	p2pService := services.NewP2PService(db, p2pRepo, ledgerRepo, userRepo, configRepo, authService)
+	adminUserService := services.NewAdminUserService(db, userRepo, ledgerRepo, auditRepo)
+	staffService := services.NewStaffService(staffRepo, userRepo, auditRepo, rdb)
+	supportService := services.NewSupportService(supportRepo, b2Client)
 
 	// Handlers
 	h := &routes.Handlers{
@@ -121,11 +127,12 @@ func main() {
 		Tree:       handlers.NewTreeHandler(treeService),
 		Commission: handlers.NewCommissionHandler(commissionService, binaryService),
 		Payout:     handlers.NewPayoutHandler(payoutService),
-		Admin:      handlers.NewAdminHandler(packageService, configService, payoutService, userRepo),
+		Admin:      handlers.NewAdminHandler(packageService, configService, payoutService, userRepo, adminUserService),
 		FMCG:       handlers.NewFMCGHandler(commissionService, binaryService, userService, packageActivationService, activationService),
 		Placement:  handlers.NewPlacementHandler(placementService),
 		KYC:        handlers.NewKYCHandler(kycService),
 		P2P:        handlers.NewP2PHandler(p2pService),
+		Support:    handlers.NewSupportHandler(supportService, staffService),
 	}
 
 	app := fiber.New(fiber.Config{

@@ -31,6 +31,8 @@ const (
 	AuditActionSubAdminSupportReply       = "SUB_ADMIN_SUPPORT_REPLY"
 	AuditActionSubAdminSupportAttachment  = "SUB_ADMIN_SUPPORT_ATTACHMENT"
 	AuditActionSubAdminSupportClose       = "SUB_ADMIN_SUPPORT_CLOSE"
+	AuditActionAdminUserStatus            = "ADMIN_USER_STATUS"
+	AuditActionAdminWalletAdjustment      = "ADMIN_WALLET_ADJUSTMENT"
 )
 
 // AuditLogEntry is a single row for GET /admin/staff/activity.

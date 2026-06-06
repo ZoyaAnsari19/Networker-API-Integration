@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Users as UsersIcon,
   Search,
@@ -9,8 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  FileCheck2,
-  Wallet,
   Loader2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -18,9 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ActionModal } from "@/components/modals/action-modal";
+import { NetworkerDetailModal } from "@/components/networkers/networker-detail-modal";
 import { PAGE_SIZE, USER_STATUS_OPTIONS } from "@/lib/constants";
-import { cn, formatINR, formatDate } from "@/lib/utils";
+import { formatINR } from "@/lib/utils";
 import {
   fetchAllNetworkers,
   fetchNetworkerPage,
@@ -29,173 +26,6 @@ import {
 } from "@/lib/admin-networkers";
 import { listPackages } from "@/lib/admin-api";
 import { ApiError } from "@/lib/api-client";
-
-function DetailRow({
-  label,
-  value,
-  mono,
-}: {
-  label: React.ReactNode;
-  value: React.ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex justify-between gap-4 py-2.5 border-b border-slate-100 last:border-0">
-      <span className="text-sm text-slate-500 shrink-0">{label}</span>
-      <span
-        className={cn(
-          "text-sm text-right text-slate-900 font-medium",
-          mono && "font-mono",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function UserDetail({
-  user,
-  onClose,
-}: {
-  user: NetworkerRow;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const dailyPct =
-    user.daily_binary_cap > 0
-      ? (user.today_binary_earned / user.daily_binary_cap) * 100
-      : 0;
-
-  const Bar = ({ pct, color }: { pct: number; color: string }) => (
-    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-      <div
-        className={cn("h-full rounded-full", color)}
-        style={{ width: `${Math.min(100, pct)}%` }}
-      />
-    </div>
-  );
-
-  return (
-    <ActionModal
-      title={user.full_name}
-      onClose={onClose}
-      maxWidth="max-w-2xl"
-      titleIcon={<UsersIcon className="w-5 h-5" />}
-    >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
-        <div>
-          <DetailRow label="Sponsor ID" value={user.sponsor_id} mono />
-          <DetailRow label="Email" value={user.email} />
-          <DetailRow label="Phone" value={user.phone ?? "—"} />
-          <DetailRow label="Status" value={<Badge status={user.status} />} />
-          <DetailRow
-            label="Placement"
-            value={<Badge status={user.placement_status} />}
-          />
-          <DetailRow
-            label="Joined"
-            value={formatDate(user.created_at, false)}
-          />
-        </div>
-        <div>
-          <DetailRow
-            label="Package"
-            value={`${user.package_name ?? "—"} · ${user.package_amount ? formatINR(user.package_amount) : "—"}`}
-          />
-          <DetailRow
-            label="Monthly income"
-            value={formatINR(user.monthly_income_paise)}
-          />
-          <DetailRow
-            label="Monthly shopping"
-            value={formatINR(user.monthly_shopping_paise)}
-          />
-          <DetailRow
-            label="Binary earned today"
-            value={formatINR(user.today_binary_earned)}
-          />
-          <DetailRow
-            label="Daily binary cap"
-            value={formatINR(user.daily_binary_cap)}
-          />
-        </div>
-      </div>
-
-      <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/50 px-3.5 py-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<FileCheck2 className="w-4 h-4" />}
-          onClick={() => {
-            const q = new URLSearchParams();
-            q.set("user", user.user_id);
-            router.push(`/kyc-requests?${q.toString()}`);
-            onClose();
-          }}
-        >
-          View KYC
-        </Button>
-        <p className="text-[11px] text-slate-500 leading-snug sm:text-right sm:max-w-[70%]">
-          Opens KYC requests filtered for this networker.
-        </p>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-slate-200/90 bg-white px-3 py-3 sm:px-4 sm:py-3 shadow-sm ring-1 ring-violet-500/[0.06]">
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 shrink-0">
-            <Wallet className="w-3.5 h-3.5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-900 leading-tight">
-              Secure Coin wallet
-            </p>
-            <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
-              Linked platform wallet
-            </p>
-          </div>
-        </div>
-        {user.secure_wallet_external_id ? (
-          <div className="rounded-lg border border-violet-100 bg-gradient-to-b from-violet-50/40 to-white px-3 py-2.5 flex flex-col sm:flex-row sm:items-stretch sm:divide-x sm:divide-violet-100 gap-3 sm:gap-0 sm:py-0">
-            <div className="flex-1 min-w-0 sm:px-3 sm:py-2.5 flex flex-col justify-center">
-              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">
-                Wallet ID
-              </span>
-              <p className="text-xs font-mono font-medium text-slate-900 mt-1 break-all leading-snug">
-                {user.secure_wallet_external_id}
-              </p>
-            </div>
-            <div className="shrink-0 sm:w-[42%] sm:px-3 sm:py-2.5 flex flex-col justify-center sm:items-end border-t border-violet-100 pt-2 sm:border-t-0 sm:pt-0">
-              <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-right">
-                Balance
-              </span>
-              <p className="text-lg font-bold tabular-nums text-violet-900 mt-0.5 sm:text-right leading-none">
-                {formatINR(user.secure_wallet_balance_paise ?? 0)}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-3 py-8">
-            <p className="text-xs text-slate-500">Not linked</p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-6 pt-2 border-t border-slate-100">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-[var(--text-secondary)]">
-            Today&apos;s binary cap usage
-          </span>
-          <span className="text-xs text-[var(--text-muted)] tabular-nums">
-            {formatINR(user.today_binary_earned)} / {formatINR(user.daily_binary_cap)}{" "}
-            ({dailyPct.toFixed(1)}%)
-          </span>
-        </div>
-        <Bar pct={dailyPct} color="bg-amber-500" />
-      </div>
-    </ActionModal>
-  );
-}
 
 export default function UsersPage() {
   const [rows, setRows] = useState<NetworkerRow[]>([]);
@@ -517,7 +347,13 @@ export default function UsersPage() {
         )}
       </Card>
 
-      {detail && <UserDetail user={detail} onClose={() => setDetail(null)} />}
+      {detail && (
+        <NetworkerDetailModal
+          initial={detail}
+          onClose={() => setDetail(null)}
+          onUpdated={() => void loadUsers()}
+        />
+      )}
     </div>
   );
 }
