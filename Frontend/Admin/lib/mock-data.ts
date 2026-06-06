@@ -84,23 +84,6 @@ export type DirectIncomeRow = {
   created_at: string;
 };
 
-export type BinaryIncomeRow = {
-  id: number;
-  user_id: string;
-  user_sponsor_id: string;
-  user_name: string;
-  source_order_id: string;
-  matched_bv: number;             // paise
-  commission: number;             // paise (binary match)
-  level_bonus: number;            // paise
-  total_credited: number;         // paise
-  cap_deducted: number;           // paise (portion chopped by caps)
-  pair_number: number;            // nth pair on that day
-  carry_forward_bv: number;       // paise
-  carry_forward_leg: "LEFT" | "RIGHT";
-  created_at: string;
-};
-
 export type PayoutRequest = {
   payout_id: string;
   user_id: string;
@@ -332,33 +315,6 @@ export const DIRECT_INCOME_INITIAL: DirectIncomeRow[] = Array.from({ length: 60 
     capped: capRem === 0 && i % 9 === 0,
     cap_remaining: capRem,
     created_at: isoAgo(Math.floor(i / 4), i % 24),
-  };
-});
-
-export const BINARY_INCOME_INITIAL: BinaryIncomeRow[] = Array.from({ length: 60 }, (_, i) => {
-  const earner = USERS_INITIAL[(i + 2) % USERS_INITIAL.length];
-  const matched = 80_000 + (i * 113) % 1_800_000;
-  const commission = Math.round(matched * 0.10);
-  const pairNum = (i % 10) + 1;
-  const slabPercent = pairNum === 1 ? 2.5 : pairNum <= 3 ? 2.5 : pairNum <= 5 ? 3.0 : pairNum <= 7 ? 3.5 : pairNum <= 9 ? 4.0 : 5.0;
-  const levelBonus = Math.round(matched * (slabPercent / 100));
-  const total = commission + levelBonus;
-  const capHit = i % 13 === 0;
-  return {
-    id: 30_000 + i,
-    user_id: earner.user_id,
-    user_sponsor_id: earner.sponsor_id,
-    user_name: earner.full_name,
-    source_order_id: `ord-${70000 + i}`,
-    matched_bv: matched,
-    commission,
-    level_bonus: levelBonus,
-    total_credited: capHit ? Math.floor(total * 0.3) : total,
-    cap_deducted: capHit ? total - Math.floor(total * 0.3) : 0,
-    pair_number: pairNum,
-    carry_forward_bv: (i * 4321) % 900_000,
-    carry_forward_leg: i % 2 === 0 ? "LEFT" : "RIGHT",
-    created_at: isoAgo(Math.floor(i / 3), (i * 2) % 24),
   };
 });
 

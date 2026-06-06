@@ -134,5 +134,37 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO 
 **Branch:** zoya-dev 
 
+## [06-06-2026 10:07] — Backend API server started
+
+**What changed:** Started Docker Desktop, brought up `fb-postgres` and `fb-redis` containers, rebuilt `fb-server.exe`, and started backend API on port 3100. 
+**Files touched:** N/A 
+**API endpoints used:** `GET /health` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 10:53] — User frontend dev server started
+
+**What changed:** Started User UI dev server on port 4001 from `Frontend/User` after verifying dependencies. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 10:54] — Admin frontend dev server started
+
+**What changed:** Started Admin UI dev server on port 4002 from `Frontend/Admin` after verifying dependencies. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 11:00] — Admin binary income API integration
+
+**What changed:** Binary income page loads TEAM wallet ledger credits (`BINARY_MATCH`, `LEVEL_BONUS`) grouped by order reference with user enrichment; mock `BINARY_INCOME_INITIAL` removed. Matched BV estimated from commission config; cap/carry-forward show as unavailable without pair-match API. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/income/binary/page.tsx`, `Frontend/Admin/lib/admin-binary-income.ts`, `Frontend/Admin/lib/mock-data.ts` 
+**API endpoints used:** `GET /api/v1/wallets/TEAM/ledger`, `GET /api/v1/admin/users`, `GET /api/v1/admin/config/commissions` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
 ---
 
