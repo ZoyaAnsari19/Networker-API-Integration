@@ -134,5 +134,101 @@ After EVERY task, append below in the exact format.
 **Breaking change:** NO 
 **Branch:** zoya-dev 
 
+## [06-06-2026 10:07] — Backend API server started
+
+**What changed:** Started Docker Desktop, brought up `fb-postgres` and `fb-redis` containers, rebuilt `fb-server.exe`, and started backend API on port 3100. 
+**Files touched:** N/A 
+**API endpoints used:** `GET /health` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 10:53] — User frontend dev server started
+
+**What changed:** Started User UI dev server on port 4001 from `Frontend/User` after verifying dependencies. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 10:54] — Admin frontend dev server started
+
+**What changed:** Started Admin UI dev server on port 4002 from `Frontend/Admin` after verifying dependencies. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 11:00] — Admin binary income API integration
+
+**What changed:** Binary income page loads TEAM wallet ledger credits (`BINARY_MATCH`, `LEVEL_BONUS`) grouped by order reference with user enrichment; mock `BINARY_INCOME_INITIAL` removed. Matched BV estimated from commission config; cap/carry-forward show as unavailable without pair-match API. 
+**Files touched:** `Frontend/Admin/app/(dashboard)/income/binary/page.tsx`, `Frontend/Admin/lib/admin-binary-income.ts`, `Frontend/Admin/lib/mock-data.ts` 
+**API endpoints used:** `GET /api/v1/wallets/TEAM/ledger`, `GET /api/v1/admin/users`, `GET /api/v1/admin/config/commissions` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 14:25] — Fix Admin zustand missing dependency
+
+**What changed:** Added `zustand` to Admin frontend dependencies to fix build error on login page (`useAdminAuthStore`). 
+**Files touched:** `Frontend/Admin/package.json`, `Frontend/Admin/package-lock.json` 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 15:10] — Admin user management and wallet adjust APIs
+
+**What changed:** Added admin endpoints to get/update networkers, read wallet balances and ledger, and post manual wallet adjustments (`ADMIN_ADJUSTMENT`) with audit logging; documented in `openapi.yml` (Swagger UI reads same file). 
+**Files touched:** `Backend/API/internal/models/admin_user.go`, `Backend/API/internal/models/audit.go`, `Backend/API/internal/services/admin_user_service.go`, `Backend/API/internal/services/admin_user_service_test.go`, `Backend/API/internal/handlers/admin_handler.go`, `Backend/API/internal/routes/routes.go`, `Backend/API/cmd/server/main.go`, `Backend/API/docs/openapi.yml` 
+**API endpoints used:** `GET /api/v1/admin/users/:id`, `PATCH /api/v1/admin/users/:id`, `GET /api/v1/admin/users/:id/wallets`, `GET /api/v1/admin/users/:id/wallets/:type/ledger`, `POST /api/v1/admin/users/:id/wallet/adjust` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 15:20] — Swagger UI started on port 4003
+
+**What changed:** Started OpenAPI Swagger UI from `Backend/API/docs` serving updated `openapi.yml`. 
+**Files touched:** N/A 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 15:05] — Backend API server restarted (fresh build)
+
+**What changed:** Stopped stale process on port 3100, rebuilt `fb-server.exe` with latest admin user/wallet APIs, and started fresh backend on port 3100. 
+**Files touched:** N/A 
+**API endpoints used:** `GET /health` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 15:15] — Fix admin sign out and route protection
+
+**What changed:** Sign out now clears auth session via `logout()` and redirects to `/login`; wired `AuthGuard` on root layout; header shows logged-in user from session instead of hardcoded admin email. 
+**Files touched:** `Frontend/Admin/components/layout/app-layout.tsx`, `Frontend/Admin/components/auth/auth-providers.tsx`, `Frontend/Admin/app/layout.tsx` 
+**API endpoints used:** N/A 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 15:45] — User login 401 diagnosis
+
+**What changed:** Confirmed User frontend login hits backend correctly; 401 is wrong password (not a routing bug). Verified working dev credentials: `bilal.sheikh123456@gmail.com` / `12345678` (SPF00001). `moin@gmail.com` (SPF00128) has a different bcrypt hash and rejects `12345678`. 
+**Files touched:** N/A 
+**API endpoints used:** `POST /api/v1/auth/login` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 16:10] — Networkers admin user management UI
+
+**What changed:** View modal on Networkers page wired to new admin user APIs: fetch profile, wallet balances, status update (ACTIVE/INACTIVE/BLOCKED), wallet credit/debit adjust, and per-user DIRECT/TEAM ledger with pagination. 
+**Files touched:** `Frontend/Admin/lib/admin-api.ts`, `Frontend/Admin/components/networkers/networker-detail-modal.tsx`, `Frontend/Admin/app/(dashboard)/users/page.tsx` 
+**API endpoints used:** `GET /api/v1/admin/users/:id`, `PATCH /api/v1/admin/users/:id`, `GET /api/v1/admin/users/:id/wallets`, `GET /api/v1/admin/users/:id/wallets/:type/ledger`, `POST /api/v1/admin/users/:id/wallet/adjust` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
+## [06-06-2026 16:45] — Support API wiring and UI integration
+
+**What changed:** Registered support routes in backend (user + admin tickets/topics); documented all endpoints in `openapi.yml` v1.0.11. User `/support` page integrated with real APIs (topics, tickets, replies, close). Admin new `/support` page with ticket queue, assign/reply/close, and topics CRUD; nav link added. 
+**Files touched:** `Backend/API/cmd/server/main.go`, `Backend/API/internal/routes/routes.go`, `Backend/API/docs/openapi.yml`, `Frontend/User/src/lib/support-api.ts`, `Frontend/User/src/app/support/page.tsx`, `Frontend/Admin/lib/admin-api.ts`, `Frontend/Admin/app/(dashboard)/support/page.tsx`, `Frontend/Admin/components/layout/app-layout.tsx`, `Frontend/Admin/components/ui/badge.tsx` 
+**API endpoints used:** `GET/POST /api/v1/me/support/*`, `GET/POST/PUT/DELETE /api/v1/admin/support/*` 
+**Breaking change:** NO 
+**Branch:** zoya-dev 
+
 ---
 

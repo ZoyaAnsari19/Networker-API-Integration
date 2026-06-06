@@ -12,19 +12,22 @@ import (
 )
 
 type AdminHandler struct {
-	packageService *services.PackageService
-	configService  *services.ConfigService
-	payoutService  *services.PayoutService
-	userRepo       *repository.UserRepo
+	packageService  *services.PackageService
+	configService   *services.ConfigService
+	payoutService   *services.PayoutService
+	userRepo        *repository.UserRepo
+	adminUserService *services.AdminUserService
 }
 
 func NewAdminHandler(packageService *services.PackageService, configService *services.ConfigService,
-	payoutService *services.PayoutService, userRepo *repository.UserRepo) *AdminHandler {
+	payoutService *services.PayoutService, userRepo *repository.UserRepo,
+	adminUserService *services.AdminUserService) *AdminHandler {
 	return &AdminHandler{
-		packageService: packageService,
-		configService:  configService,
-		payoutService:  payoutService,
-		userRepo:       userRepo,
+		packageService:   packageService,
+		configService:    configService,
+		payoutService:    payoutService,
+		userRepo:         userRepo,
+		adminUserService: adminUserService,
 	}
 }
 
@@ -150,6 +153,72 @@ func (h *AdminHandler) ListUsers(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
 	return response.Paginated(c, users, page, limit, total)
+}
+
+func (h *AdminHandler) GetUser(c *fiber.Ctx) error {
+	user, err := h.adminUserService.GetNetworker(c.Context(), c.Params("id"))
+	if err != nil {
+		return response.Error(c, fiber.StatusNotFound, err.Error())
+	}
+	return response.Success(c, fiber.StatusOK, "", user)
+}
+
+func (h *AdminHandler) UpdateUserStatus(c *fiber.Ctx) error {
+	adminID := c.Locals("user_id").(string)
+	var req models.AdminUpdateUserStatusRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	user, err := h.adminUserService.UpdateStatus(
+		c.Context(), adminID, c.Params("id"), &req, c.IP(), c.Get(fiber.HeaderUserAgent),
+	)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, err.Error())
+	}
+	logSubAdminActivity(c, nil, models.AuditActionSubAdminUserStatus, models.AuditTargetTypeUser, user.UserID, map[string]any{
+		"status": user.Status,
+	})
+	return response.Success(c, fiber.StatusOK, "user status updated", user)
+}
+
+func (h *AdminHandler) GetUserWallets(c *fiber.Ctx) error {
+	wallets, err := h.adminUserService.GetWallets(c.Context(), c.Params("id"))
+	if err != nil {
+		return response.Error(c, fiber.StatusNotFound, err.Error())
+	}
+	return response.Success(c, fiber.StatusOK, "", wallets)
+}
+
+func (h *AdminHandler) GetUserWalletLedger(c *fiber.Ctx) error {
+	walletType := c.Params("type")
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	entries, total, err := h.adminUserService.ListLedger(c.Context(), c.Params("id"), walletType, page, limit)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, err.Error())
+	}
+	return response.Paginated(c, entries, page, limit, total)
+}
+
+func (h *AdminHandler) AdjustUserWallet(c *fiber.Ctx) error {
+	adminID := c.Locals("user_id").(string)
+	var req models.AdminWalletAdjustRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	result, err := h.adminUserService.AdjustWallet(
+		c.Context(), adminID, c.Params("id"), &req, c.IP(), c.Get(fiber.HeaderUserAgent),
+	)
+	if err != nil {
+		return response.Error(c, fiber.StatusBadRequest, err.Error())
+	}
+	logSubAdminActivity(c, nil, models.AuditActionSubAdminWalletAdjustment, models.AuditTargetTypeUser, result.UserID, map[string]any{
+		"wallet_type": result.WalletType,
+		"entry_type":  result.EntryType,
+		"amount":      result.Amount,
+		"ledger_id":   result.LedgerID,
+	})
+	return response.Success(c, fiber.StatusOK, "wallet adjusted", result)
 }
 
 // --- Payouts ---

@@ -21,6 +21,7 @@ type Handlers struct {
 	Placement  *handlers.PlacementHandler
 	KYC        *handlers.KYCHandler
 	P2P        *handlers.P2PHandler
+	Support    *handlers.SupportHandler
 }
 
 func Setup(app *fiber.App, h *Handlers, jwtManager *jwt.Manager, apiKeyRepo *repository.APIKeyRepo) {
@@ -88,6 +89,15 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *jwt.Manager, apiKeyRepo *rep
 	protected.Get("/me/placement-requests", h.Placement.ListMyRequests)
 	protected.Post("/me/placement-requests/:id/decide", h.Placement.DecideMyRequest)
 
+	// --- Support tickets (networker) ---
+	protected.Get("/me/support/topics", h.Support.ListTopicsForMe)
+	protected.Post("/me/support/tickets", h.Support.CreateMyTicket)
+	protected.Get("/me/support/tickets", h.Support.ListMyTickets)
+	protected.Get("/me/support/tickets/:id", h.Support.GetMyTicket)
+	protected.Post("/me/support/tickets/:id/messages", h.Support.PostMyTicketMessage)
+	protected.Post("/me/support/tickets/:id/attachments", h.Support.UploadMyAttachment)
+	protected.Post("/me/support/tickets/:id/close", h.Support.CloseMyTicket)
+
 	// --- Admin (JWT + Admin Role) ---
 	admin := protected.Group("/admin", middleware.AdminRequired())
 
@@ -110,6 +120,11 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *jwt.Manager, apiKeyRepo *rep
 
 	// Users
 	admin.Get("/users", h.Admin.ListUsers)
+	admin.Get("/users/:id", h.Admin.GetUser)
+	admin.Patch("/users/:id", h.Admin.UpdateUserStatus)
+	admin.Get("/users/:id/wallets", h.Admin.GetUserWallets)
+	admin.Get("/users/:id/wallets/:type/ledger", h.Admin.GetUserWalletLedger)
+	admin.Post("/users/:id/wallet/adjust", h.Admin.AdjustUserWallet)
 
 	// Payouts
 	admin.Get("/payouts", h.Admin.ListPayouts)
@@ -124,4 +139,17 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *jwt.Manager, apiKeyRepo *rep
 	admin.Get("/kyc/requests", h.KYC.AdminList)
 	admin.Get("/kyc/requests/:kycId", h.KYC.AdminGet)
 	admin.Patch("/kyc/requests/:kycId", h.KYC.AdminUpdate)
+
+	// Support tickets (admin)
+	admin.Get("/support/tickets", h.Support.AdminListTickets)
+	admin.Get("/support/tickets/:id", h.Support.AdminGetTicket)
+	admin.Post("/support/tickets/:id/assign-to-me", h.Support.AdminAssignToMe)
+	admin.Post("/support/tickets/:id/messages", h.Support.AdminPostMessage)
+	admin.Post("/support/tickets/:id/attachments", h.Support.AdminUploadAttachment)
+	admin.Post("/support/tickets/:id/close", h.Support.AdminCloseTicket)
+	admin.Post("/support/tickets/:id/reassign", h.Support.AdminReassignTicket)
+	admin.Get("/support/topics", h.Support.AdminListTopics)
+	admin.Post("/support/topics", h.Support.AdminCreateTopic)
+	admin.Put("/support/topics/:id", h.Support.AdminUpdateTopic)
+	admin.Delete("/support/topics/:id", h.Support.AdminDeleteTopic)
 }
